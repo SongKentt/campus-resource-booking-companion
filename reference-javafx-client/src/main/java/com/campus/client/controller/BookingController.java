@@ -1,5 +1,6 @@
 package com.campus.client.controller;
 
-//test
+//test song kent
 public class BookingController {
+
 }
