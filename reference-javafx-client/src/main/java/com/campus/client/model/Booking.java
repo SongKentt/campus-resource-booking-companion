@@ -5,25 +5,25 @@ import java.time.LocalTime;
 
 public class Booking {
     private final String bookRef;
-    private final String studentId;
     private final String resourceId;
     private final LocalDate date;
     private final LocalTime startTime;
     private final LocalTime endTime;
+    private final String studentId;
     private int status;
 
-    public Booking(String bookRef, String studentId, String resourceId, LocalDate date, LocalTime startTime,
-                   LocalTime endTime, int status){
+    public Booking(String bookRef, String resourceId, LocalDate date, LocalTime startTime,
+                   LocalTime endTime, String studentId, int status){
         this.bookRef = bookRef;
-        this.studentId = studentId;
         this.resourceId = resourceId;
         this.date = date;
         this.startTime = startTime;
         this.endTime = endTime;
+        this.studentId = studentId;
         this.status = status;
     }
 
-    public String getBookRef(){
+    public String getBookingRef(){
         return bookRef;
     }
 

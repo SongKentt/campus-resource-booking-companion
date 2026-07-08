@@ -1,14 +1,15 @@
 package com.campus.client.model;
 
 public class Student {
+    private final String studentId;
     private final String name;
     private final String password;
-    private final String studentId;
 
-    public Student(String name, String password, String studentId){
+
+    public Student(String studentId, String name, String password){
+        this.studentId = studentId;
         this.name = name;
         this.password = password;
-        this.studentId = studentId;
     }
 
     public String getStudentId(){
