@@ -1,4 +1,88 @@
 package com.campus.client.service;
 
+import com.campus.client.mcp.CampusMcpClient;
+import com.campus.client.model.Booking;
+import com.campus.client.model.DataStorage;
+import com.campus.client.model.Student;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
 public class CampusService {
+    private final CampusMcpClient mcpClient;
+    private final DataStorage dataStorage;
+
+    public CampusService(CampusMcpClient mcpClient, DataStorage dataStorage){
+        this.mcpClient = mcpClient;
+        this.dataStorage = dataStorage;
+    }
+
+    //login
+    public boolean validateStudent(String studentId, String password){
+        for(Student s : dataStorage.loadStudents()){
+            if(s.getStudentId().equals(studentId) && s.getStudentPassword().equals(password)){
+                return true;
+
+            }
+        }
+        return false;
+    }
+
+    // check resource availability
+    public String checkAvailability(String date, String building){
+        Map<String, Object> argument = new HashMap<>();
+        argument.put("date",date);
+
+        if(building != null && !building.isEmpty()){
+            argument.put("building",building);
+        }
+
+        return mcpClient.callTool("checkAvailability", argument);
+    }
+
+    //book resource
+    public Booking bookResource(String studentId, String resourceId, LocalDate date, LocalTime start, LocalTime end){
+
+        Map<String, Object> argument = new HashMap<>();
+        argument.put("resourceId", resourceId);
+        argument.put("date", date.toString());
+        argument.put("startTime", start.toString());
+        argument.put("endTime", end.toString());
+        argument.put("studentId", studentId);
+
+        String result = mcpClient.callTool("bookResource" , argument);
+
+        if(result.startsWith("ERROR:")){
+            throw new IllegalStateException(result);
+        }
+
+        Booking booking = new Booking(result,resourceId,date,start,end,studentId,0);
+
+        dataStorage.saveBooking(booking);
+        return booking;
+
+    }
+
+    //view booking
+    public ArrayList<Booking> getUserBookings(String studentId){
+        ArrayList<Booking> result = new ArrayList<>();
+        for(Booking b : dataStorage.loadBookings()){
+            if(b.getStudentId().equals(studentId)){
+                result.add(b);
+
+            }
+
+        }
+        return result;
+    }
+
+    //cancel booking
+    public void cancelBooking(String bookingRef){
+        dataStorage.updateBookingStatus(bookingRef,1);
+    }
 }
+
+
