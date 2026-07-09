@@ -25,6 +25,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
+// ================================================================
+// CLASS DECLARATION
+// ================================================================
+
 /**
  * Main navigation container for the Campus Resource Booking Companion.
  *
@@ -39,20 +43,27 @@ import java.util.stream.Collectors;
  * Design matches the Figma wireframes from Part A report.
  */
 public class MainView extends BorderPane {
-    // NavBar Components
+
+    // ================================================================
+    // SECTION 1: NAVBAR COMPONENTS
+    // ================================================================
+
     private HBox navbar;
     private Circle mcpStatusIndicator;
     private Label mcpStatusLabel;
     private Label userInfoLabel;
 
     private Button homeBtn;
-    private Button availabilityBtn;
+    // private Button availabilityBtn;  // REMOVED - Button no longer needed
     private Button bookingBtn;
     private Button historyBtn;
     private Button policyBtn;
     private Button logoutBtn;
 
-    // Views
+    // ================================================================
+    // SECTION 2: VIEWS (Content areas)
+    // ================================================================
+
     private LoginView loginView;
     private VBox homeContent;
 
@@ -62,46 +73,78 @@ public class MainView extends BorderPane {
     private VBox historyPlaceholder;
     private VBox policyPlaceholder;
 
-    // MCP References
+    // ================================================================
+    // SECTION 3: MCP/RAG REFERENCES (From Reference)
+    // ================================================================
+
     private CampusMcpClient mcp;
     private RagService rag;
 
-    // Background thread
+    // ================================================================
+    // SECTION 4: BACKGROUND THREAD (From Reference - Prevents UI freezing)
+    // ================================================================
+
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "ui-worker");
         t.setDaemon(true);
         return t;
     });
 
-    // statusLabel
+    // ================================================================
+    // SECTION 5: STATUS LABEL (For App.java's setStatus() calls)
+    // ================================================================
+
     private Label statusLabel;
 
-    // TestUsers
+    // ================================================================
+    // SECTION 6: TEST USERS (Hardcoded for testing)
+    // ================================================================
+
     private final Map<String, String> testUsers = new HashMap<>();
 
-    // Constructor
+    // ================================================================
+    // SECTION 7: CONSTRUCTOR
+    // ================================================================
+
     public MainView() {
+        // Initialize test users
         initTestUsers();
+
         buildNavbar();
         buildLoginView();
         buildHomeContent();
         buildPlaceholders();
         buildStatusLabel();
+
+        // Set up login action
         setupLoginAction();
+
         setTop(navbar);
-        showLogin();
+        showLogin(); // Start with login screen (FR1)
     }
 
-    // Test User Methods
+    // ================================================================
+    // SECTION 8: INITIALIZE TEST USERS
+    // ================================================================
+
     private void initTestUsers() {
         testUsers.put("0375421", "password123");
         testUsers.put("0377465", "password123");
         testUsers.put("0387332", "password123");
         testUsers.put("0376612", "password123");
         testUsers.put("0387409", "password123");
+        // Add more test users as needed
         testUsers.put("1234567", "test123");
     }
-    // Sets up the login action for the login view.
+
+    // ================================================================
+    // SECTION 9: SETUP LOGIN ACTION
+    // ================================================================
+
+    /**
+     * Sets up the login action for the login view.
+     * This handles the login button click event.
+     */
     private void setupLoginAction() {
         loginView.setLoginAction(() -> {
             loginView.clearFieldErrors();
@@ -109,7 +152,7 @@ public class MainView extends BorderPane {
             String id = loginView.getStudentId();
             String password = loginView.getPassword();
 
-            // Validate empty fields
+            // Validate empty fields (FR7)
             if (id.isEmpty()) {
                 loginView.showStudentIdError("Please enter a Student ID");
                 return;
@@ -128,20 +171,25 @@ public class MainView extends BorderPane {
                 setStatusMessage("Logged in as: " + id);
                 loginView.clearFields();
             } else {
-                // Login failed
                 loginView.showPasswordError("Invalid Student ID or password.");
                 System.out.println("❌ Login failed for: " + id);
             }
         });
     }
 
-    // Validates user against hardcoded test users.
+    /**
+     * Validates a user against the hardcoded test users.
+     * Later this will be replaced with real CampusService validation.
+     */
     private boolean isValidTestUser(String id, String password) {
         String expectedPassword = testUsers.get(id);
         return expectedPassword != null && expectedPassword.equals(password);
     }
 
-    // Top Navigation Bar
+    // ================================================================
+    // SECTION 10: NAVBAR BUILDER (Option 1 - REMOVED Resource Availability)
+    // ================================================================
+
     private void buildNavbar() {
         navbar = new HBox(10);
         navbar.setPadding(new Insets(8, 15, 8, 15));
@@ -149,15 +197,15 @@ public class MainView extends BorderPane {
         navbar.setAlignment(Pos.CENTER_LEFT);
         navbar.setId("navbar");
 
-        // Create Buttons
+        // ---- Navigation Buttons - HOME FIRST! ----
         homeBtn = createHomeLogoutButton("Home");
-        availabilityBtn = createNavButton("Resource\nAvailability");
+        // availabilityBtn = createNavButton("Resource\nAvailability");  // REMOVED
         bookingBtn = createNavButton("Resource\nBooking");
         historyBtn = createNavButton("Booking\nHistory");
         policyBtn = createNavButton("Policy\nAssistant");
         logoutBtn = createHomeLogoutButton("Logout");
 
-        // MCP Status Indicator
+        // ---- MCP Status Indicator (Green/Red circle) ----
         mcpStatusIndicator = new Circle(8);
         mcpStatusIndicator.setFill(Color.RED);
         mcpStatusIndicator.setId("mcpStatus");
@@ -167,32 +215,32 @@ public class MainView extends BorderPane {
         mcpStatusLabel.setId("mcpStatusLabel");
         mcpStatusLabel.setPadding(new Insets(0, 10, 0, 5));
 
-        // User Info
+        // ---- User Info (shows logged-in student ID) ----
         userInfoLabel = new Label();
         userInfoLabel.setStyle("-fx-text-fill: #95A5A6; -fx-font-size: 11px;");
         userInfoLabel.setId("userInfo");
 
-        // Hide buttons until login
+        // ---- Hide buttons until login ----
         hideAllNavButtons();
 
-        // Event Handlers
+        // ---- Event Handlers ----
         homeBtn.setOnAction(e -> showHome());
-        availabilityBtn.setOnAction(e -> showAvailability());
+        // availabilityBtn.setOnAction(e -> showAvailability());  // REMOVED
         bookingBtn.setOnAction(e -> showBooking());
         historyBtn.setOnAction(e -> showHistory());
         policyBtn.setOnAction(e -> showPolicy());
         logoutBtn.setOnAction(e -> handleLogout());
 
-        // Spacer pushes user info to the right
+        // ---- Spacer pushes user info to the right ----
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // Add all to navbar
+        // ---- Add all to navbar ----
         navbar.getChildren().addAll(
                 homeBtn,
                 mcpStatusIndicator,
                 mcpStatusLabel,
-                availabilityBtn,
+                // availabilityBtn,  // REMOVED
                 bookingBtn,
                 historyBtn,
                 policyBtn,
@@ -276,9 +324,9 @@ public class MainView extends BorderPane {
         return btn;
     }
 
-    // ============================================================
-    // STATUS LABEL (For App.java's setStatus() calls)
-    // ============================================================
+    // ================================================================
+    // SECTION 11: STATUS LABEL (For App.java's setStatus() calls)
+    // ================================================================
 
     private void buildStatusLabel() {
         // This is a hidden label that App.java uses to set status messages
@@ -299,7 +347,10 @@ public class MainView extends BorderPane {
         });
     }
 
-    // Create different screens
+    // ================================================================
+    // SECTION 12: VIEW BUILDERS
+    // ================================================================
+
     private void buildLoginView() {
         loginView = new LoginView();
         // Note: setupLoginAction() is called separately after construction
@@ -317,11 +368,12 @@ public class MainView extends BorderPane {
         headerRow.setAlignment(Pos.CENTER_LEFT);
         headerRow.setId("headerRow");
 
+        // Circular logo container
         StackPane logoCircle = new StackPane();
         logoCircle.setPrefSize(90, 90);
         logoCircle.setMaxSize(90, 90);
         logoCircle.setStyle("-fx-background-color: #DCDCDC; -fx-background-radius: 100;");
-        Label logoLabel = new Label("🏛️");
+        Label logoLabel = new Label("CR");
         logoLabel.setFont(Font.font("System", 35));
         logoLabel.setId("logo");
         logoCircle.getChildren().add(logoLabel);
@@ -449,9 +501,9 @@ public class MainView extends BorderPane {
         return box;
     }
 
-    // ============================================================
-    // NAVIGATION METHODS
-    // ============================================================
+    // ================================================================
+    // SECTION 13: NAVIGATION METHODS
+    // ================================================================
 
     public void showLogin() {
         setCenter(loginView);
@@ -483,9 +535,9 @@ public class MainView extends BorderPane {
         setCenter(policyPlaceholder);
     }
 
-    // ============================================================
-    // LOGOUT (FR10)
-    // ============================================================
+    // ================================================================
+    // SECTION 14: LOGOUT (FR10)
+    // ================================================================
 
     private void handleLogout() {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
@@ -506,13 +558,13 @@ public class MainView extends BorderPane {
         });
     }
 
-    // ============================================================
-    // HELPER METHODS
-    // ============================================================
+    // ================================================================
+    // SECTION 15: HELPER METHODS
+    // ================================================================
 
     public void showAllNavButtons() {
         homeBtn.setVisible(true);
-        availabilityBtn.setVisible(true);
+        // availabilityBtn.setVisible(true);  // REMOVED
         bookingBtn.setVisible(true);
         historyBtn.setVisible(true);
         policyBtn.setVisible(true);
@@ -521,7 +573,7 @@ public class MainView extends BorderPane {
 
     public void hideAllNavButtons() {
         homeBtn.setVisible(false);
-        availabilityBtn.setVisible(false);
+        // availabilityBtn.setVisible(false);  // REMOVED
         bookingBtn.setVisible(false);
         historyBtn.setVisible(false);
         policyBtn.setVisible(false);
@@ -554,9 +606,9 @@ public class MainView extends BorderPane {
         return worker;
     }
 
-    // ============================================================
-    // MCP BINDING (FROM REFERENCE - Keep this!)
-    // ============================================================
+    // ================================================================
+    // SECTION 16: MCP BINDING (FROM REFERENCE)
+    // ================================================================
 
     /**
      * Binds the MCP client and RAG service to this view.
@@ -588,9 +640,9 @@ public class MainView extends BorderPane {
         return rag;
     }
 
-    // ============================================================
-    // REFRESH DISCOVERY (FROM REFERENCE - For debugging)
-    // ============================================================
+    // ================================================================
+    // SECTION 17: REFRESH DISCOVERY (FROM REFERENCE - For debugging)
+    // ================================================================
 
     /**
      * Populates the discovery information.
@@ -613,9 +665,9 @@ public class MainView extends BorderPane {
         });
     }
 
-    // ============================================================
-    // getRoot() - FOR App.java
-    // ============================================================
+    // ================================================================
+    // SECTION 18: getRoot() - FOR App.java
+    // ================================================================
 
     /**
      * Returns the root node for this view.

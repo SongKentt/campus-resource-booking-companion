@@ -17,25 +17,29 @@ public class LoginController {
     private final CampusService service;
     private final Runnable onLoginSuccess;
 
+    // Background thread
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "login-worker");
         t.setDaemon(true);
         return t;
     });
-
+    // Constructor
     public LoginController(LoginView view, CampusService service, Runnable onLoginSuccess) {
         this.view = view;
         this.service = service;
         this.onLoginSuccess = onLoginSuccess;
         this.view.setLoginAction(this::handleLogin);
     }
-
+    // Main logics
     public void handleLogin() {
+        // Clear old errors
         view.clearFieldErrors();
 
+        // Get input
         String studentId = view.getStudentId();
         String password = view.getPassword();
 
+        // Validate input
         boolean valid = true;
         if (studentId.isEmpty()) {
             view.showStudentIdError("Please enter a valid Student ID");
@@ -49,13 +53,16 @@ public class LoginController {
             return;
         }
 
+        // disable button
         view.setLoginButtonDisabled(true);
 
+        // background thread
         worker.submit(() -> {
             try {
-                // UPDATED: Use validateStudent() instead of login()
+                // authenticate
                 boolean isValid = service.validateStudent(studentId, password);
 
+                // update UI on main thread
                 Platform.runLater(() -> {
                     view.setLoginButtonDisabled(false);
                     if (isValid) {
@@ -66,6 +73,7 @@ public class LoginController {
                     }
                 });
             } catch (Exception ex) {
+                // Handle errors
                 Platform.runLater(() -> {
                     view.setLoginButtonDisabled(false);
                     view.showError("Could not reach the server. Please try again.\n(" + ex.getMessage() + ")");
