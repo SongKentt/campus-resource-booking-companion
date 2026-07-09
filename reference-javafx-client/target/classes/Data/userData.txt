@@ -1,3 +1,0 @@
-# studentId | studentName | studentPassword
-S0374565 | See Qui Ven | DuaBiskutGenug12345
-S0375421 | Song Kent | Kent1234
