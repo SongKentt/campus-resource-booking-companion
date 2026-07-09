@@ -19,26 +19,14 @@ import java.util.List;
  * The Booking History screen - shows the student's upcoming and past bookings,
  * and lets them cancel an upcoming one (FR4, FR5).
  *
- * Same as BookingView, this extends BaseView (which extends VBox), so MainView
- * can just drop this straight into its content area.
- *
- * Note: our wireframe originally had a "Submitted On" column, but Booking.java
- * doesn't store when a booking was made, so it's left out here for now.
+ * NAVBAR: This screen does NOT have its own navbar.
+ * It relies on MainView's shared navbar for navigation.
  */
 public class ViewBookingView extends BaseView {
 
     private ViewBookingController controller;
 
-    // top nav bar pieces - built directly in this class, no separate NavBar class
-    private final Label mcpStatusDot = new Label("●");
-    private final Label mcpStatusLabel = new Label("MCP Connected");
-    private final Button homeButton = new Button("Home");
-    private final Button bookingNavButton = new Button("Resource\nBooking");
-    private final Button historyNavButton = new Button("Booking\nHistory");
-    private final Button policyNavButton = new Button("Policy\nAssistant");
-    private final Button logoutButton = new Button("Logout");
-
-    // pill-style switch between Upcoming and Past, instead of a plain TabPane
+    // pill-style switch between Upcoming and Past
     private final ToggleGroup switchGroup = new ToggleGroup();
     private final ToggleButton upcomingToggle = new ToggleButton("Upcoming Bookings");
     private final ToggleButton pastToggle = new ToggleButton("Past Bookings");
@@ -56,36 +44,10 @@ public class ViewBookingView extends BaseView {
         wireEvents();
     }
 
-    /** MainView calls this after creating the view, so it can hand us a controller. */
     public void setController(ViewBookingController controller) {
         this.controller = controller;
     }
 
-    /** Hook up what happens when the Resource Booking nav button is clicked. */
-    public void setOnBookingButtonClicked(Runnable action) {
-        bookingNavButton.setOnAction(e -> action.run());
-    }
-
-    public void setOnHomeButtonClicked(Runnable action) {
-        homeButton.setOnAction(e -> action.run());
-    }
-
-    public void setOnPolicyButtonClicked(Runnable action) {
-        policyNavButton.setOnAction(e -> action.run());
-    }
-
-    public void setOnLogoutButtonClicked(Runnable action) {
-        logoutButton.setOnAction(e -> action.run());
-    }
-
-    /** Updates the green/red MCP status dot in the nav bar. */
-    public void setMcpConnected(boolean connected) {
-        mcpStatusDot.setTextFill(connected ? Color.web("#2ECC71") : Color.web("#E74C3C"));
-        mcpStatusLabel.setText(connected ? "MCP Connected" : "MCP Disconnected");
-    }
-
-    // refresh the list every time this screen becomes visible, in case a
-    // booking was cancelled or added somewhere else since we last looked
     @Override
     public void onShow() {
         viewBookings();
@@ -103,13 +65,11 @@ public class ViewBookingView extends BaseView {
         setStyle("-fx-background-color: #f5f5f5;");
 
         HBox switchBar = buildSwitch();
-
         buildUpcomingTable();
         buildPastTable();
         pastTable.setVisible(false);
         pastTable.setManaged(false);
 
-        // both tables sit in the same spot, we just show/hide whichever tab is picked
         StackPane tableStack = new StackPane(upcomingTable, pastTable);
         VBox.setVgrow(tableStack, Priority.ALWAYS);
 
@@ -120,56 +80,11 @@ public class ViewBookingView extends BaseView {
         mainContent.setAlignment(Pos.TOP_CENTER);
         VBox.setVgrow(mainContent, Priority.ALWAYS);
 
-        getChildren().addAll(buildNavBar(), buildHeroBanner("Booking History"), mainContent);
+        // ✅ REMOVED: buildNavBar() - uses MainView's shared navbar
+        getChildren().addAll(buildHeroBanner("Booking History"), mainContent);
     }
 
-    /**
-     * Top nav bar: Home, MCP status, the screen buttons, Logout. Built directly
-     * here (same as in BookingView) since we're not using a shared NavBar class.
-     * Styled gray on purpose so it doesn't clash with the navy hero banner below it.
-     */
-    private HBox buildNavBar() {
-        HBox bar = new HBox(10);
-        bar.setAlignment(Pos.CENTER_LEFT);
-        bar.setPadding(new Insets(8, 16, 8, 16));
-        bar.setStyle("-fx-background-color: #7F8C8D;");
-
-        homeButton.setStyle(navButtonStyle(false));
-
-        mcpStatusDot.setFont(Font.font(14));
-        mcpStatusLabel.setTextFill(Color.WHITE);
-        mcpStatusLabel.setFont(Font.font("Arial", 11));
-        setMcpConnected(true);
-        HBox statusBox = new HBox(4, mcpStatusDot, mcpStatusLabel);
-        statusBox.setAlignment(Pos.CENTER_LEFT);
-
-        bookingNavButton.setStyle(navButtonStyle(false));
-        historyNavButton.setStyle(navButtonStyle(true)); // this screen is the active one
-        policyNavButton.setStyle(navButtonStyle(false));
-        for (Button b : new Button[]{bookingNavButton, historyNavButton, policyNavButton}) {
-            b.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
-            b.setFont(Font.font("Arial", 11));
-            b.setPrefWidth(105);
-        }
-
-        logoutButton.setStyle(navButtonStyle(false));
-
-        Region rightSpacer = new Region();
-        HBox.setHgrow(rightSpacer, Priority.ALWAYS);
-
-        bar.getChildren().addAll(homeButton, statusBox,
-                bookingNavButton, historyNavButton, policyNavButton,
-                rightSpacer, logoutButton);
-        return bar;
-    }
-
-    private String navButtonStyle(boolean active) {
-        return active
-                ? "-fx-background-color: #2C3E50; -fx-text-fill: white; -fx-background-radius: 4; -fx-font-weight: bold;"
-                : "-fx-background-color: #D9D9D9; -fx-text-fill: #2C2C2C; -fx-background-radius: 4;";
-    }
-
-    /** Navy title banner under the nav bar, matching BookingView's. */
+    /** Navy title banner under the navbar. */
     private VBox buildHeroBanner(String title) {
         Label titleLabel = new Label(title);
         titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 26));
@@ -182,7 +97,6 @@ public class ViewBookingView extends BaseView {
         return banner;
     }
 
-    /** two touching rounded buttons that act like one switch, not a plain TabPane */
     private HBox buildSwitch() {
         upcomingToggle.setToggleGroup(switchGroup);
         pastToggle.setToggleGroup(switchGroup);
@@ -215,7 +129,6 @@ public class ViewBookingView extends BaseView {
 
     @SuppressWarnings("unchecked")
     private void buildUpcomingTable() {
-        // little minus button to cancel a booking, left of each row
         TableColumn<Booking, Void> cancelCol = new TableColumn<>("");
         cancelCol.setPrefWidth(50);
         cancelCol.setResizable(false);
@@ -269,7 +182,7 @@ public class ViewBookingView extends BaseView {
     private void wireEvents() {
         switchGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
             if (newToggle == null) {
-                upcomingToggle.setSelected(true); // don't let both buttons end up unselected
+                upcomingToggle.setSelected(true);
                 return;
             }
             boolean showUpcoming = newToggle == upcomingToggle;
@@ -282,14 +195,12 @@ public class ViewBookingView extends BaseView {
         });
     }
 
-    // this is viewBookings() from the class diagram
     private void viewBookings() {
         if (controller != null) {
             controller.handleViewBookings();
         }
     }
 
-    // this is cancelBooking() from the class diagram - shows the confirm popup first
     private void cancelBooking(Booking booking) {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Cancel Booking");
@@ -308,7 +219,7 @@ public class ViewBookingView extends BaseView {
     }
 
     // ---------------------------------------------------------------
-    // stuff the controller calls to update what's on screen
+    // Controller calls these to update the UI
     // ---------------------------------------------------------------
 
     public void displayBookings(List<Booking> upcoming, List<Booking> past) {
@@ -321,11 +232,6 @@ public class ViewBookingView extends BaseView {
         upcomingData.remove(booking);
         showSuccess("Booking is cancelled!");
     }
-
-    // ---------------------------------------------------------------
-    // overriding BaseView's default Alert popups with a status banner instead -
-    // feels less disruptive than a popup every time you view your bookings
-    // ---------------------------------------------------------------
 
     @Override
     public void showError(String message) {
@@ -346,7 +252,7 @@ public class ViewBookingView extends BaseView {
     }
 
     // ---------------------------------------------------------------
-    // little helpers
+    // Helpers
     // ---------------------------------------------------------------
 
     private TableColumn<Booking, String> makeColumn(String title, String property, double prefWidth) {

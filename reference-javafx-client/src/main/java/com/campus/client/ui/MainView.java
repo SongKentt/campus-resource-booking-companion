@@ -32,12 +32,12 @@ import java.util.stream.Collectors;
 /**
  * Main navigation container for the Campus Resource Booking Companion.
  *
- * This class combines:
- * - The Figma design (navbar, login, home with cards)
- * - The MCP/RAG functionality from the reference client
+ * This class owns the SINGLE SHARED NAVBAR used across all screens.
+ * All screens (LoginView, BookingView, ViewBookingView, etc.) are displayed
+ * in the center content area below this navbar.
  *
  * Layout:
- * - TOP: Navigation bar with MCP status and feature buttons
+ * - TOP: Navigation bar (shared across all screens)
  * - CENTER: Content area that switches between views
  *
  * Design matches the Figma wireframes from Part A report.
@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 public class MainView extends BorderPane {
 
     // ================================================================
-    // SECTION 1: NAVBAR COMPONENTS
+    // SECTION 1: NAVBAR COMPONENTS (SHARED ACROSS ALL SCREENS)
     // ================================================================
 
     private HBox navbar;
@@ -54,7 +54,6 @@ public class MainView extends BorderPane {
     private Label userInfoLabel;
 
     private Button homeBtn;
-    // private Button availabilityBtn;  // REMOVED - Button no longer needed
     private Button bookingBtn;
     private Button historyBtn;
     private Button policyBtn;
@@ -66,11 +65,14 @@ public class MainView extends BorderPane {
 
     private LoginView loginView;
     private VBox homeContent;
+    private String currentStudentId = "";
 
-    // Placeholder for other views (will be replaced by team members)
+    // ---- REAL VIEWS (from Member 4) ----
+    private BookingView bookingView;
+    private ViewBookingView viewBookingView;
+
+    // ---- Placeholders (keep for Availability and Policy) ----
     private VBox availabilityPlaceholder;
-    private VBox bookingPlaceholder;
-    private VBox historyPlaceholder;
     private VBox policyPlaceholder;
 
     // ================================================================
@@ -81,7 +83,7 @@ public class MainView extends BorderPane {
     private RagService rag;
 
     // ================================================================
-    // SECTION 4: BACKGROUND THREAD (From Reference - Prevents UI freezing)
+    // SECTION 4: BACKGROUND THREAD (Prevents UI freezing - NFR2)
     // ================================================================
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
@@ -110,17 +112,18 @@ public class MainView extends BorderPane {
         // Initialize test users
         initTestUsers();
 
-        buildNavbar();
-        buildLoginView();
-        buildHomeContent();
-        buildPlaceholders();
-        buildStatusLabel();
+        buildNavbar();          // Build the shared navbar
+        buildLoginView();       // Create login screen
+        buildHomeContent();     // Create home screen with cards
+        buildBookingViews();    // Create real booking views (Member 4)
+        buildPlaceholders();    // Create placeholders for Availability and Policy
+        buildStatusLabel();     // Create hidden status label
 
         // Set up login action
         setupLoginAction();
 
-        setTop(navbar);
-        showLogin(); // Start with login screen (FR1)
+        setTop(navbar);         // Put navbar at top
+        showLogin();            // Start with login screen (FR1)
     }
 
     // ================================================================
@@ -133,7 +136,6 @@ public class MainView extends BorderPane {
         testUsers.put("0387332", "password123");
         testUsers.put("0376612", "password123");
         testUsers.put("0387409", "password123");
-        // Add more test users as needed
         testUsers.put("1234567", "test123");
     }
 
@@ -165,6 +167,7 @@ public class MainView extends BorderPane {
             // Validate against test users
             if (isValidTestUser(id, password)) {
                 // Success!
+                currentStudentId = id;
                 System.out.println("✅ Login successful for: " + id);
                 showHome();
                 showAllNavButtons();
@@ -187,7 +190,7 @@ public class MainView extends BorderPane {
     }
 
     // ================================================================
-    // SECTION 10: NAVBAR BUILDER (Option 1 - REMOVED Resource Availability)
+    // SECTION 10: SHARED NAVBAR BUILDER (ONE NAVBAR TO RULE THEM ALL)
     // ================================================================
 
     private void buildNavbar() {
@@ -197,9 +200,8 @@ public class MainView extends BorderPane {
         navbar.setAlignment(Pos.CENTER_LEFT);
         navbar.setId("navbar");
 
-        // ---- Navigation Buttons - HOME FIRST! ----
+        // ---- Navigation Buttons ----
         homeBtn = createHomeLogoutButton("Home");
-        // availabilityBtn = createNavButton("Resource\nAvailability");  // REMOVED
         bookingBtn = createNavButton("Resource\nBooking");
         historyBtn = createNavButton("Booking\nHistory");
         policyBtn = createNavButton("Policy\nAssistant");
@@ -225,7 +227,6 @@ public class MainView extends BorderPane {
 
         // ---- Event Handlers ----
         homeBtn.setOnAction(e -> showHome());
-        // availabilityBtn.setOnAction(e -> showAvailability());  // REMOVED
         bookingBtn.setOnAction(e -> showBooking());
         historyBtn.setOnAction(e -> showHistory());
         policyBtn.setOnAction(e -> showPolicy());
@@ -240,7 +241,6 @@ public class MainView extends BorderPane {
                 homeBtn,
                 mcpStatusIndicator,
                 mcpStatusLabel,
-                // availabilityBtn,  // REMOVED
                 bookingBtn,
                 historyBtn,
                 policyBtn,
@@ -353,7 +353,6 @@ public class MainView extends BorderPane {
 
     private void buildLoginView() {
         loginView = new LoginView();
-        // Note: setupLoginAction() is called separately after construction
     }
 
     private void buildHomeContent() {
@@ -479,10 +478,23 @@ public class MainView extends BorderPane {
         return card;
     }
 
+    /**
+     * Creates the real booking views from Member 4.
+     * These screens do NOT have their own navbars.
+     * They rely on MainView's shared navbar.
+     */
+    private void buildBookingViews() {
+        // ---- Create BookingView ----
+        bookingView = new BookingView();
+        // No navigation callbacks needed - uses MainView's shared navbar
+
+        // ---- Create ViewBookingView ----
+        viewBookingView = new ViewBookingView();
+        // No navigation callbacks needed - uses MainView's shared navbar
+    }
+
     private void buildPlaceholders() {
         availabilityPlaceholder = createPlaceholder("Resource Availability");
-        bookingPlaceholder = createPlaceholder("Resource Booking");
-        historyPlaceholder = createPlaceholder("Booking History");
         policyPlaceholder = createPlaceholder("Policy Assistant");
     }
 
@@ -505,6 +517,10 @@ public class MainView extends BorderPane {
     // SECTION 13: NAVIGATION METHODS
     // ================================================================
 
+    /**
+     * Shows the login screen (FR1).
+     * Navbar buttons are hidden.
+     */
     public void showLogin() {
         setCenter(loginView);
         loginView.onShow();
@@ -512,25 +528,60 @@ public class MainView extends BorderPane {
         userInfoLabel.setText("");
     }
 
+    /**
+     * Shows the home screen with resource cards.
+     * Navbar buttons are shown after successful login.
+     */
     public void showHome() {
         setCenter(homeContent);
         showAllNavButtons();
-        // Update MCP status - use mcp != null as indicator
         updateMCPStatus(mcp != null);
+
+        // Pass student ID to booking view if it exists
+        if (bookingView != null) {
+            bookingView.setStudentId(currentStudentId);
+        }
     }
 
+    /**
+     * Shows the Resource Availability screen (FR2).
+     * Currently a placeholder - to be replaced by Member 4.
+     */
     public void showAvailability() {
         setCenter(availabilityPlaceholder);
     }
 
+    /**
+     * Shows the Resource Booking screen (FR3).
+     * Uses the real BookingView from Member 4.
+     */
     public void showBooking() {
-        setCenter(bookingPlaceholder);
+        if (bookingView != null) {
+            setCenter(bookingView);
+            bookingView.onShow();
+            bookingView.setStudentId(currentStudentId);
+        } else {
+            setCenter(createPlaceholder("Resource Booking"));
+        }
     }
 
+    /**
+     * Shows the Booking History screen (FR4, FR5).
+     * Uses the real ViewBookingView from Member 4.
+     */
     public void showHistory() {
-        setCenter(historyPlaceholder);
+        if (viewBookingView != null) {
+            setCenter(viewBookingView);
+            viewBookingView.onShow();
+        } else {
+            setCenter(createPlaceholder("Booking History"));
+        }
     }
 
+    /**
+     * Shows the Policy Assistant screen (FR6).
+     * Currently a placeholder - to be replaced by Member 5.
+     */
     public void showPolicy() {
         setCenter(policyPlaceholder);
     }
@@ -539,6 +590,10 @@ public class MainView extends BorderPane {
     // SECTION 14: LOGOUT (FR10)
     // ================================================================
 
+    /**
+     * Handles logout with confirmation dialog.
+     * Clears session and returns to login screen.
+     */
     private void handleLogout() {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Logout");
@@ -547,6 +602,7 @@ public class MainView extends BorderPane {
 
         alert.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
+                currentStudentId = "";
                 if (loginView != null) {
                     loginView.clearFields();
                 }
@@ -562,28 +618,38 @@ public class MainView extends BorderPane {
     // SECTION 15: HELPER METHODS
     // ================================================================
 
+    /**
+     * Shows all navigation buttons (called after successful login).
+     */
     public void showAllNavButtons() {
         homeBtn.setVisible(true);
-        // availabilityBtn.setVisible(true);  // REMOVED
         bookingBtn.setVisible(true);
         historyBtn.setVisible(true);
         policyBtn.setVisible(true);
         logoutBtn.setVisible(true);
     }
 
+    /**
+     * Hides all navigation buttons (called before login).
+     */
     public void hideAllNavButtons() {
         homeBtn.setVisible(false);
-        // availabilityBtn.setVisible(false);  // REMOVED
         bookingBtn.setVisible(false);
         historyBtn.setVisible(false);
         policyBtn.setVisible(false);
         logoutBtn.setVisible(false);
     }
 
+    /**
+     * Sets the user info label (shows logged-in student ID).
+     */
     public void setStatusMessage(String message) {
         userInfoLabel.setText(message);
     }
 
+    /**
+     * Updates the MCP connection status indicator (NFR4).
+     */
     public void updateMCPStatus(boolean connected) {
         Platform.runLater(() -> {
             mcpStatusIndicator.setFill(connected ? Color.GREEN : Color.RED);
@@ -600,7 +666,6 @@ public class MainView extends BorderPane {
 
     /**
      * Gets the background worker thread (for other controllers).
-     * FROM REFERENCE - needed for background tasks.
      */
     public ExecutorService getWorker() {
         return worker;
@@ -617,7 +682,6 @@ public class MainView extends BorderPane {
     public void bind(CampusMcpClient mcp, RagService rag) {
         this.mcp = mcp;
         this.rag = rag;
-        // Just check if mcp is not null as connection indicator
         updateMCPStatus(mcp != null);
         if (rag == null) {
             System.out.println("RAG service not available (API key missing?)");
@@ -626,7 +690,6 @@ public class MainView extends BorderPane {
 
     /**
      * Gets the MCP client (for other controllers).
-     * FROM REFERENCE.
      */
     public CampusMcpClient getMcp() {
         return mcp;
@@ -634,7 +697,6 @@ public class MainView extends BorderPane {
 
     /**
      * Gets the RAG service (for other controllers).
-     * FROM REFERENCE.
      */
     public RagService getRag() {
         return rag;
@@ -654,7 +716,6 @@ public class MainView extends BorderPane {
         }
         worker.submit(() -> {
             try {
-                // This is from the reference - useful for debugging
                 String tools = mcp.listTools().stream()
                         .map(t -> "  • " + t.name() + " — " + t.description())
                         .collect(Collectors.joining("\n"));

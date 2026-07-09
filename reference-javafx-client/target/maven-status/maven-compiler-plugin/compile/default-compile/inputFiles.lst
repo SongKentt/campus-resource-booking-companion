@@ -21,5 +21,7 @@
 /Users/jocelynlean/Desktop/campus-resource-booking-companion/reference-javafx-client/src/main/java/com/campus/client/service/CampusService.java
 /Users/jocelynlean/Desktop/campus-resource-booking-companion/reference-javafx-client/src/main/java/com/campus/client/service/RagService.java
 /Users/jocelynlean/Desktop/campus-resource-booking-companion/reference-javafx-client/src/main/java/com/campus/client/ui/BaseView.java
+/Users/jocelynlean/Desktop/campus-resource-booking-companion/reference-javafx-client/src/main/java/com/campus/client/ui/BookingView.java
 /Users/jocelynlean/Desktop/campus-resource-booking-companion/reference-javafx-client/src/main/java/com/campus/client/ui/LoginView.java
 /Users/jocelynlean/Desktop/campus-resource-booking-companion/reference-javafx-client/src/main/java/com/campus/client/ui/MainView.java
+/Users/jocelynlean/Desktop/campus-resource-booking-companion/reference-javafx-client/src/main/java/com/campus/client/ui/ViewBookingView.java
