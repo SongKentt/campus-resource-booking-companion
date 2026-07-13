@@ -2,6 +2,8 @@ package com.campus.client.ui;
 
 import com.campus.client.controller.FAQController;
 import com.campus.client.mcp.CampusMcpClient;
+import com.campus.client.model.DataStorage;
+import com.campus.client.model.Student;
 import com.campus.client.rag.RagService;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -21,6 +23,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -78,15 +81,17 @@ public class MainView extends BorderPane {
     //Status Label  (For App.java's setStatus() calls)
     private Label statusLabel;
 
+    // DataStorage instance for reading user data from file
+    private DataStorage dataStorage;
 
-    // Test users
-    private final Map<String, String> testUsers = new HashMap<>();
+    // User data loaded from file (studentId -> password)
+    private final Map<String, String> userCredentials = new HashMap<>();
 
 
     // Constructor
     public MainView() {
-        // Initialize test users
-        initTestUsers();
+        // Initialize DataStorage and load users from file
+        initDataStorage();
 
         buildNavbar();          // Build the shared navbar
         buildLoginView();       // Create login screen
@@ -107,17 +112,53 @@ public class MainView extends BorderPane {
         System.out.println("DEBUG: RAG is " + (rag == null ? "NULL" : "NOT NULL"));
     }
 
-    // Initialize test users
-    private void initTestUsers() {
-        testUsers.put("0375421", "password123");
-        testUsers.put("0377465", "password123");
-        testUsers.put("0387332", "password123");
-        testUsers.put("0376612", "password123");
-        testUsers.put("0387409", "password123");
-        testUsers.put("1234567", "test123");
+
+    // Loads users from userData.txt
+    private void initDataStorage() {
+        try {
+            // Create DataStorage with file paths
+            // DataStorage(String userDataFilePath, String bookingHistoryFilePath)
+            dataStorage = new DataStorage(
+                    "data/userData.txt",      // User data file
+                    "data/bookingHistory.txt" // Booking history file
+            );
+
+            // Load students from userData.txt
+            List<Student> students = dataStorage.loadStudents();
+
+            // Populate the userCredentials map
+            for (Student student : students) {
+                userCredentials.put(student.getStudentId(), student.getStudentPassword());
+                System.out.println("Loaded user: " + student.getStudentId() + " -> " + student.getStudentName());
+            }
+
+            System.out.println("Total users loaded from file: " + userCredentials.size());
+
+            // If no users loaded, fall back to hardcoded
+            if (userCredentials.isEmpty()) {
+                System.err.println("No users found in userData.txt. Using hardcoded users.");
+                initHardcodedTestUsers();
+            }
+
+        } catch (Exception e) {
+            System.err.println("Failed to load user data from file: " + e.getMessage());
+            System.err.println("Falling back to hardcoded test users...");
+            initHardcodedTestUsers();
+        }
     }
 
-    // SETUP LOGIN ACTION
+     //Fallback method for hardcoded test users if file loading fails.
+    private void initHardcodedTestUsers() {
+        userCredentials.put("0375421", "password123");
+        userCredentials.put("0377465", "password123");
+        userCredentials.put("0387332", "password123");
+        userCredentials.put("0376612", "password123");
+        userCredentials.put("0387409", "password123");
+        userCredentials.put("1234567", "test123");
+        System.out.println("Loaded " + userCredentials.size() + " hardcoded test users");
+    }
+
+    // Setup login action
     private void setupLoginAction() {
         loginView.setLoginAction(() -> {
             loginView.clearFieldErrors();
@@ -135,8 +176,8 @@ public class MainView extends BorderPane {
                 return;
             }
 
-            // Validate against test users
-            if (isValidTestUser(id, password)) {
+            // Validate against user credentials from file
+            if (isValidUser(id, password)) {
                 // Success!
                 currentStudentId = id;
                 System.out.println("Login successful for: " + id);
@@ -151,13 +192,11 @@ public class MainView extends BorderPane {
         });
     }
 
-
-     //Validates a user against the hardcoded test users.
-    private boolean isValidTestUser(String id, String password) {
-        String expectedPassword = testUsers.get(id);
+    //Validates a user against credentials loaded from userData.txt.
+    private boolean isValidUser(String id, String password) {
+        String expectedPassword = userCredentials.get(id);
         return expectedPassword != null && expectedPassword.equals(password);
     }
-
 
     // Shared NavBar Builder
     private void buildNavbar() {
@@ -217,8 +256,7 @@ public class MainView extends BorderPane {
         );
     }
 
-
-      //Creates 4 compact navigation button for main resource
+    // Creates 4 compact navigation button for main resource
     private Button createNavButton(String text) {
         Button btn = new Button(text);
         btn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
@@ -253,8 +291,7 @@ public class MainView extends BorderPane {
         return btn;
     }
 
-
-     //Creates a button for Home and Logout.
+    // Creates a button for Home and Logout.
     private Button createHomeLogoutButton(String text) {
         Button btn = new Button(text);
         btn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
@@ -288,7 +325,6 @@ public class MainView extends BorderPane {
         return btn;
     }
 
-
     // Status Label (For App.java's setStatus() calls)
     private void buildStatusLabel() {
         statusLabel = new Label();
@@ -296,14 +332,12 @@ public class MainView extends BorderPane {
         this.getChildren().add(statusLabel);
     }
 
-
-     //Sets the status message in the navbar.Called by App.java via view.setStatus()
+    // Sets the status message in the navbar.Called by App.java via view.setStatus()
     public void setStatus(String message) {
         Platform.runLater(() -> {
             userInfoLabel.setText(message);
         });
     }
-
 
     // View Builders
     private void buildLoginView() {
@@ -424,20 +458,19 @@ public class MainView extends BorderPane {
 
         card.getChildren().addAll(iconLabel, nameLabel);
 
-        //  Click event - navigates to booking
+        // Click event - navigates to booking
         card.setOnMouseClicked(e -> showBooking());
 
         return card;
     }
 
-
-     //Creates the booking views
+    // Creates the booking views
     private void buildBookingViews() {
         bookingView = new BookingView();
         viewBookingView = new ViewBookingView();
     }
 
-     //Creates the Policy Assistant view from Member 5.
+    // Creates the Policy Assistant view from Member 5.
     private void buildFAQView() {
         // Create the FAQ view
         faqView = new FAQView();
@@ -471,8 +504,7 @@ public class MainView extends BorderPane {
         return box;
     }
 
-
-    //Navigation methods
+    // Navigation methods
     public void showLogin() {
         setCenter(loginView);
         loginView.onShow();
@@ -480,7 +512,7 @@ public class MainView extends BorderPane {
         userInfoLabel.setText("");
     }
 
-    //Shows the home screen with resource cards.
+    // Shows the home screen with resource cards.
     public void showHome() {
         setCenter(homeContent);
         showAllNavButtons();
@@ -492,7 +524,7 @@ public class MainView extends BorderPane {
     }
 
 
-     // Shows the Resource Booking screen
+    // Shows the Resource Booking screen
     public void showBooking() {
         if (bookingView != null) {
             setCenter(bookingView);
@@ -513,7 +545,7 @@ public class MainView extends BorderPane {
         }
     }
 
-     // Shows the Policy Assistant screen
+    // Shows the Policy Assistant screen
     public void showPolicy() {
         System.out.println("showPolicy() called");
         System.out.println("faqView is: " + (faqView == null ? "NULL" : "NOT NULL"));
@@ -549,7 +581,6 @@ public class MainView extends BorderPane {
             }
         });
     }
-
 
     // Helper methods
     public void showAllNavButtons() {
@@ -593,7 +624,7 @@ public class MainView extends BorderPane {
         this.rag = rag;
         updateMCPStatus(mcp != null);
 
-        //  Update FAQ with real RagService
+        // Update FAQ with real RagService
         if (rag != null && faqView != null) {
             faqController = new FAQController(rag, faqView);
             faqView.setController(faqController);
