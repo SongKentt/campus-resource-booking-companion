@@ -119,7 +119,7 @@ public class MainView extends BorderPane {
             // Create DataStorage with file paths
             // DataStorage(String userDataFilePath, String bookingHistoryFilePath)
             dataStorage = new DataStorage(
-                    "data/userData.txt",      // User data file
+                    "reference-javafx-client/data/userData.txt",      // User data file
                     "data/bookingHistory.txt" // Booking history file
             );
 
