@@ -6,7 +6,6 @@ import com.campus.client.llm.LlmClient;
 import com.campus.client.llm.OpenAiClient;
 import com.campus.client.mcp.CampusMcpClient;
 import com.campus.client.rag.RagService;
-//import com.campus.client.rag.RagService_old;
 import com.campus.client.ui.MainView;
 import javafx.application.Application;
 import javafx.application.Platform;
