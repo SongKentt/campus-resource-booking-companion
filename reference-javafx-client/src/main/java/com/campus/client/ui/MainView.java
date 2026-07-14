@@ -715,6 +715,24 @@ public class MainView extends BorderPane {
         this.rag = rag;
         updateMCPStatus(mcp != null);
 
+        // IMPORTANT: buildBookingViews() (called earlier, in the constructor)
+        // had to build campusService/the two controllers before a real MCP
+        // connection existed yet, using a placeholder client that never got
+        // connect() called on it. Now that bind() has a genuinely connected
+        // mcp, rebuild the service and controllers using the real thing -
+        // otherwise every server-backed call (checkAvailability, bookResource)
+        // keeps failing with "this.client is null" forever, even with a green
+        // MCP status dot, since the dot reflects a different client instance.
+        if (mcp != null && bookingView != null && viewBookingView != null) {
+            campusService = new CampusService(mcp, dataStorage);
+            bookingController = new BookingController(bookingView, campusService);
+            viewBookingController = new ViewBookingController(viewBookingView, campusService);
+            if (!currentStudentId.isEmpty()) {
+                viewBookingController.setStudentId(currentStudentId);
+            }
+            System.out.println("Booking screens rebuilt with a real connected MCP client");
+        }
+
         // Update FAQ with real RagService
         if (rag != null && faqView != null) {
             faqController = new FAQController(rag, faqView);

@@ -30,14 +30,22 @@ public class BookingController {
     private final BookingView view;
     private final CampusService campusService;
 
-    // Sample resource list for now - CampusService doesn't have a way to list all
-    // resources yet (nothing wraps campus://facilities). Swap this out once that's ready.
+    // Real facility data, taken directly from facilities.txt. Note: D9A.01,
+    // D9B.01, E9A.03, E7.01, E7.02, and C7.01 currently fail a validation
+    // regex in the server's CampusTools.parseRooms() (it expects IDs shaped
+    // like "KA-P1", but these are shaped like "D9A.01") - booking those will
+    // show "Unknown resource" until that regex is fixed server-side. KA-P1,
+    // KA-P2, and SP-B1 already work correctly today.
     private final List<Resource> allResources = List.of(
-            new Resource("D9A.01", "Discussion Room D9A.01", "Block D", 6),
-            new Resource("D9A.02", "Discussion Room D9A.02", "Block D", 6),
-            new Resource("SP.11", "Study Pod 11", "Block E", 2),
-            new Resource("LAB.03", "Lab Workstation 03", "Block E", 30),
-            new Resource("SPT.01", "Badminton Court 1", "Sports Complex", 20)
+            new Resource("D9A.01", "Discussion Room D9A.01", "D", 6),
+            new Resource("D9B.01", "Discussion Room D9B.01", "D", 8),
+            new Resource("E9A.03", "Discussion Room E9A.03", "E", 4),
+            new Resource("E7.01", "Group Study Room E7.01", "E", 6),
+            new Resource("E7.02", "Group Study Room E7.02", "E", 6),
+            new Resource("C7.01", "Computer Lab C7.01", "LAB", 30),
+            new Resource("KA-P1", "Study Pod KA-P1", "LIB", 2),
+            new Resource("KA-P2", "Study Pod KA-P2", "LIB", 1),
+            new Resource("SP-B1", "Basketball Court SP-B1", "OUT", 40)
     );
 
     // whichever resources match the currently selected Resource Type
@@ -102,7 +110,10 @@ public class BookingController {
             }
         };
         task.setOnSucceeded(e -> view.showAvailableResources(candidatesForSelectedType));
-        task.setOnFailed(e -> view.showError(friendlyMessage(task.getException())));
+        task.setOnFailed(e -> {
+            System.err.println("Check availability failed: " + task.getException());
+            view.showError(friendlyMessage());
+        });
         worker.submit(task);
     }
 
@@ -176,7 +187,10 @@ public class BookingController {
             if (task.getException() instanceof DuplicateBookingException) {
                 view.showDuplicateWarning();
             } else {
-                view.showError(friendlyMessage(task.getException()));
+                // full detail stays in the console for debugging - the student
+                // just sees a clean, simple message, not raw exception text
+                System.err.println("Booking failed: " + task.getException());
+                view.showError(friendlyMessage());
             }
         });
         worker.submit(task);
@@ -230,11 +244,10 @@ public class BookingController {
         return null;
     }
 
-    private String friendlyMessage(Throwable ex) {
-        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-        if (cause.getMessage() != null) {
-            return "Unable to reach the campus server. " + cause.getMessage();
-        }
+    // FR9: one clean, simple message for the student - the real exception
+    // detail goes to System.err instead, so it's still there for debugging
+    // without cluttering the UI with technical text.
+    private String friendlyMessage() {
         return "Unable to reach the campus server. Please check your connection and try again.";
     }
 

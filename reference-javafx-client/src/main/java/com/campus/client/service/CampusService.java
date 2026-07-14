@@ -40,7 +40,7 @@ public class CampusService {
             argument.put("building",building);
         }
 
-        return mcpClient.callTool("checkAvailability", argument);
+        return mcpClient.callTool("check_room_availability", argument);
     }
 
     //book resource
@@ -53,7 +53,7 @@ public class CampusService {
         argument.put("endTime", end.toString());
         argument.put("studentId", studentId);
 
-        String result = mcpClient.callTool("bookResource" , argument);
+        String result = mcpClient.callTool("book_resource" , argument);
 
         if(result.startsWith("ERROR:")){
             throw new IllegalStateException(result);
@@ -84,5 +84,6 @@ public class CampusService {
         dataStorage.updateBookingStatus(bookingRef,1);
     }
 }
+
 
 
