@@ -53,11 +53,13 @@ public class BookingController {
         this.view = view;
         this.campusService = campusService;
         view.setController(this);
-        view.setResourceTypes(getResourceTypes());
+        // no longer calling view.setResourceTypes() here - the Resource Type field
+        // is now locked and set directly by preselectResourceType() when a Home
+        // screen card is clicked, so there's no dropdown left to populate
     }
 
     // Resource.java has no "type" field, so we guess it from the room's name just
-    // for the dropdown. Doesn't affect what actually gets sent to bookResource().
+    // for filtering. Doesn't affect what actually gets sent to bookResource().
     private String deriveType(Resource resource) {
         String name = resource.getResourceName().toLowerCase();
         if (name.contains("discussion")) return "Discussion Room";
@@ -67,11 +69,8 @@ public class BookingController {
         return "Other";
     }
 
-    private List<String> getResourceTypes() {
-        return allResources.stream().map(this::deriveType).distinct().sorted().toList();
-    }
-
-    // fired when the Resource Type dropdown changes - just narrows the list
+    // fired by BookingView.preselectResourceType() when the student arrives from
+    // a Home screen card - narrows the candidate list to that type
     public void handleResourceTypeChanged(String type) {
         candidatesForSelectedType = allResources.stream()
                 .filter(r -> deriveType(r).equals(type))
@@ -243,4 +242,3 @@ public class BookingController {
         worker.shutdownNow();
     }
 }
-

@@ -1,10 +1,13 @@
 package com.campus.client.ui;
 
+import com.campus.client.controller.BookingController;
 import com.campus.client.controller.FAQController;
+import com.campus.client.controller.ViewBookingController;
 import com.campus.client.mcp.CampusMcpClient;
 import com.campus.client.model.DataStorage;
 import com.campus.client.model.Student;
 import com.campus.client.rag.RagService;
+import com.campus.client.service.CampusService;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -33,6 +36,10 @@ import java.util.stream.Collectors;
 /**
  * Main navigation container for the Campus Resource Booking Companion.
  * This class owns the one shared navbar across all screens.
+ *
+ * CHANGE: "Resource Booking" is no longer a standalone nav tab - the only way
+ * into the booking screen now is clicking one of the 4 resource type cards on
+ * the Home screen, which also pre-fills that type on the booking form.
  */
 public class MainView extends BorderPane {
 
@@ -46,7 +53,6 @@ public class MainView extends BorderPane {
     private Label userInfoLabel;
 
     private Button homeBtn;
-    private Button bookingBtn;
     private Button historyBtn;
     private Button policyBtn;
     private Button logoutBtn;
@@ -61,8 +67,13 @@ public class MainView extends BorderPane {
 
     // ResourceBooking View
     private BookingView bookingView;
+    private BookingController bookingController;
     // BookingHistory View
     private ViewBookingView viewBookingView;
+    private ViewBookingController viewBookingController;
+
+    // Shared service both booking controllers talk to
+    private CampusService campusService;
 
     // PolicyAssistant View
     private FAQView faqView;
@@ -142,11 +153,12 @@ public class MainView extends BorderPane {
      */
     private void initDataStorage() {
         try {
-            // ===== FIXED: CORRECT FILE PATH =====
-            // Files are in the 'data/' folder at project root
+            // Files sit in the data/ subfolder inside reference-javafx-client
+            // (confirmed from the actual project structure), named userData.txt
+            // and bookingRecord.txt - not "bookingHistory.txt".
             dataStorage = new DataStorage(
-                    "data/userData.txt",      // ← CORRECT: User data file
-                    "data/bookingHistory.txt" // ← CORRECT: Booking history file
+                    "data/userData.txt",
+                    "data/bookingRecord.txt"
             );
 
             // Load students from userData.txt
@@ -177,8 +189,12 @@ public class MainView extends BorderPane {
      * Fallback method for hardcoded test users if file loading fails.
      */
     private void initHardcodedTestUsers() {
-        userCredentials.put("S0375421", "Kent1234");
-        userCredentials.put("S0377465", "ven1234");
+        userCredentials.put("0375421", "password123");
+        userCredentials.put("0377465", "password123");
+        userCredentials.put("0387332", "password123");
+        userCredentials.put("0376612", "password123");
+        userCredentials.put("0387409", "password123");
+        userCredentials.put("1234567", "test123");
         System.out.println("Loaded " + userCredentials.size() + " hardcoded test users");
     }
 
@@ -208,6 +224,9 @@ public class MainView extends BorderPane {
                 // Success!
                 currentStudentId = id;
                 System.out.println("Login successful for: " + id);
+                if (viewBookingController != null) {
+                    viewBookingController.setStudentId(id);
+                }
                 showHome();
                 showAllNavButtons();
                 setStatusMessage("Logged in as: " + id);
@@ -243,8 +262,9 @@ public class MainView extends BorderPane {
         navbar.setId("navbar");
 
         // Navigation Buttons
+        // "Resource Booking" tab removed - the Home screen cards are now the
+        // only way into the booking screen (see createResourceCard() below)
         homeBtn = createHomeLogoutButton("Home");
-        bookingBtn = createNavButton("Resource\nBooking");
         historyBtn = createNavButton("Booking\nHistory");
         policyBtn = createNavButton("Policy\nAssistant");
         logoutBtn = createHomeLogoutButton("Logout");
@@ -269,7 +289,6 @@ public class MainView extends BorderPane {
 
         // Event Handlers
         homeBtn.setOnAction(e -> showHome());
-        bookingBtn.setOnAction(e -> showBooking());
         historyBtn.setOnAction(e -> showHistory());
         policyBtn.setOnAction(e -> showPolicy());
         logoutBtn.setOnAction(e -> handleLogout());
@@ -283,7 +302,6 @@ public class MainView extends BorderPane {
                 homeBtn,
                 mcpStatusIndicator,
                 mcpStatusLabel,
-                bookingBtn,
                 historyBtn,
                 policyBtn,
                 spacer,
@@ -506,18 +524,42 @@ public class MainView extends BorderPane {
 
         card.getChildren().addAll(iconLabel, nameLabel);
 
-        // Click event - navigates to booking
-        card.setOnMouseClicked(e -> showBooking());
+        // Click event - navigates to booking AND pre-fills the resource type,
+        // since "name" here is already exactly "Discussion Room" / "Study Pod" /
+        // "Lab Workstation" / "Sports Facility" - same strings BookingController
+        // uses internally, so no separate mapping needed.
+        card.setOnMouseClicked(e -> {
+            showBooking();
+            bookingView.preselectResourceType(name);
+        });
 
         return card;
     }
 
     /**
-     * Creates the booking views
+     * Creates the booking views AND wires up their controllers.
+     *
+     * IMPORTANT: this used to only create the views, never the controllers -
+     * that meant BookingView.controller stayed null forever, so every click
+     * (Resource ID, Submit Booking) silently did nothing at all, not even an
+     * error message. This wires them properly.
+     *
+     * The controllers are created here (not waiting for a successful MCP
+     * connection) because most of what they do - picking a resource type,
+     * viewing/cancelling bookings - only touches local data. Only the two
+     * calls that actually need the live server (checking availability,
+     * submitting a booking) will show a friendly error if the server isn't
+     * reachable, instead of the whole screen being unusable.
      */
     private void buildBookingViews() {
         bookingView = new BookingView();
         viewBookingView = new ViewBookingView();
+
+        CampusMcpClient bookingMcpClient = (mcp != null) ? mcp : new CampusMcpClient("http://localhost:8080");
+        campusService = new CampusService(bookingMcpClient, dataStorage);
+
+        bookingController = new BookingController(bookingView, campusService);
+        viewBookingController = new ViewBookingController(viewBookingView, campusService);
     }
 
     /**
@@ -575,7 +617,7 @@ public class MainView extends BorderPane {
         }
     }
 
-    //Shows the Resource Booking screen
+    //Shows the Resource Booking screen - reachable via the Home screen cards only
     public void showBooking() {
         if (bookingView != null) {
             setCenter(bookingView);
@@ -636,7 +678,6 @@ public class MainView extends BorderPane {
     // HELPER METHODS
     public void showAllNavButtons() {
         homeBtn.setVisible(true);
-        bookingBtn.setVisible(true);
         historyBtn.setVisible(true);
         policyBtn.setVisible(true);
         logoutBtn.setVisible(true);
@@ -644,7 +685,6 @@ public class MainView extends BorderPane {
 
     public void hideAllNavButtons() {
         homeBtn.setVisible(false);
-        bookingBtn.setVisible(false);
         historyBtn.setVisible(false);
         policyBtn.setVisible(false);
         logoutBtn.setVisible(false);

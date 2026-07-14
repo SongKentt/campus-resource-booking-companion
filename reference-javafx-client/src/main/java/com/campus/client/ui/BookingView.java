@@ -28,11 +28,11 @@ public class BookingView extends BaseView {
     private BookingController controller;
 
     // form fields
-    private final ComboBox<String> resourceTypeCombo = new ComboBox<>();
+    private final Label resourceTypeField = new Label(); // static display only, set by the Home screen card clicked
     private final TextField resourceIdField = new TextField();
     private String selectedResourceId;
 
-    private final TextField studentIdField = new TextField();
+    private final Label studentIdField = new Label(); // static display only, filled in after login
     private final TextField dateField = new TextField();
     private final TextField startTimeField = new TextField();
     private final TextField endTimeField = new TextField();
@@ -100,7 +100,7 @@ public class BookingView extends BaseView {
         StackPane.setAlignment(confirmationCard, Pos.CENTER);
         VBox.setVgrow(contentStack, Priority.ALWAYS);
 
-        // ✅ REMOVED: buildNavBar() - uses MainView's shared navbar
+        // REMOVED: buildNavBar() - uses MainView's shared navbar
         getChildren().addAll(buildHeroBanner("Book a Resource"), contentStack);
     }
 
@@ -118,8 +118,9 @@ public class BookingView extends BaseView {
     }
 
     private VBox buildFormCard() {
-        resourceTypeCombo.setPromptText("Select resource type");
-        resourceTypeCombo.setMaxWidth(Double.MAX_VALUE);
+        resourceTypeField.setStyle("-fx-background-color: #F0F0F0; -fx-background-radius: 3; "
+                + "-fx-border-color: #C0C0C0; -fx-border-radius: 3; -fx-padding: 6 10 6 10;");
+        resourceTypeField.setMaxWidth(Double.MAX_VALUE);
         styleErrorLabel(resourceTypeError);
 
         resourceIdField.setEditable(false);
@@ -127,9 +128,9 @@ public class BookingView extends BaseView {
         resourceIdField.setMaxWidth(Double.MAX_VALUE);
         styleErrorLabel(resourceIdError);
 
-        studentIdField.setPromptText("Student ID");
-        studentIdField.setEditable(false);
-        studentIdField.setStyle("-fx-background-color: #F0F0F0;");
+        studentIdField.setStyle("-fx-background-color: #F0F0F0; -fx-background-radius: 3; "
+                + "-fx-border-color: #C0C0C0; -fx-border-radius: 3; -fx-padding: 6 10 6 10;");
+        studentIdField.setMaxWidth(Double.MAX_VALUE);
         styleErrorLabel(studentIdError);
 
         dateField.setPromptText("yyyy-MM-dd");
@@ -154,7 +155,7 @@ public class BookingView extends BaseView {
         grid.setHgap(24);
         grid.setVgap(4);
         grid.getColumnConstraints().addAll(columnPercent(50), columnPercent(50));
-        grid.add(fieldBlock("Resource Type *", resourceTypeCombo, resourceTypeError), 0, 0);
+        grid.add(fieldBlock("Resource Type *", resourceTypeField, resourceTypeError), 0, 0);
         grid.add(fieldBlock("Resource ID *", resourceIdField, resourceIdError), 1, 0);
         grid.add(fieldBlock("Student ID *", studentIdField, studentIdError), 0, 1);
         grid.add(fieldBlock("Booking Date *", dateField, dateError), 1, 1);
@@ -270,15 +271,6 @@ public class BookingView extends BaseView {
     }
 
     private void wireEvents() {
-        resourceTypeCombo.setOnAction(e -> {
-            clearAllErrors();
-            selectedResourceId = null;
-            resourceIdField.clear();
-            if (controller != null) {
-                controller.handleResourceTypeChanged(resourceTypeCombo.getValue());
-            }
-        });
-
         resourceIdField.setOnMouseClicked(e -> {
             clearAllErrors();
             if (resourceIdPopup.isShowing()) {
@@ -311,8 +303,15 @@ public class BookingView extends BaseView {
         studentIdField.setText(studentId);
     }
 
-    public void setResourceTypes(List<String> types) {
-        resourceTypeCombo.setItems(FXCollections.observableArrayList(types));
+    /**
+     * Called by MainView when the student clicks a resource type card on the
+     * Home screen, so this screen opens with that type already locked in.
+     */
+    public void preselectResourceType(String type) {
+        resourceTypeField.setText(type);
+        if (controller != null) {
+            controller.handleResourceTypeChanged(type);
+        }
     }
 
     public void updateResourceIdOptions(List<Resource> resources) {
@@ -348,7 +347,6 @@ public class BookingView extends BaseView {
 
     public void setFormEnabled(boolean enabled) {
         submitButton.setDisable(!enabled);
-        resourceTypeCombo.setDisable(!enabled);
         resourceIdField.setDisable(!enabled);
         dateField.setDisable(!enabled);
         startTimeField.setDisable(!enabled);
@@ -363,7 +361,7 @@ public class BookingView extends BaseView {
     public void setResourceTypeError(String message) {
         resourceTypeError.setText(message);
         resourceTypeError.setVisible(true);
-        markFieldInvalid(resourceTypeCombo, true);
+        markFieldInvalid(resourceTypeField, true);
     }
 
     public void setResourceIdError(String message) {
@@ -398,7 +396,6 @@ public class BookingView extends BaseView {
         startTimeError.setVisible(false);
         endTimeError.setVisible(false);
 
-        markFieldInvalid(resourceTypeCombo, false);
         markFieldInvalid(resourceIdField, false);
         markFieldInvalid(dateField, false);
         markFieldInvalid(startTimeField, false);
@@ -406,7 +403,6 @@ public class BookingView extends BaseView {
     }
 
     public void resetForm() {
-        resourceTypeCombo.getSelectionModel().clearSelection();
         resourceIdTable.getItems().clear();
         resourceIdField.clear();
         selectedResourceId = null;
