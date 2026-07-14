@@ -36,7 +36,10 @@ import java.util.stream.Collectors;
  */
 public class MainView extends BorderPane {
 
-    // NavBar Components
+    // ================================================================
+    // NAVBAR COMPONENTS
+    // ================================================================
+
     private HBox navbar;
     private Circle mcpStatusIndicator;
     private Label mcpStatusLabel;
@@ -48,7 +51,10 @@ public class MainView extends BorderPane {
     private Button policyBtn;
     private Button logoutBtn;
 
-    // Views (Content areas)
+    // ================================================================
+    // VIEWS (Content areas)
+    // ================================================================
+
     private LoginView loginView;
     private VBox homeContent;
     private String currentStudentId = "";
@@ -64,22 +70,33 @@ public class MainView extends BorderPane {
     // Placeholders (keep for Availability)
     private VBox availabilityPlaceholder;
 
+    // ================================================================
+    // MCP/RAG REFERENCES
+    // ================================================================
 
-    // MCP/RAG References
     private CampusMcpClient mcp;
     private RagService rag;
     private FAQController faqController;
 
+    // ================================================================
+    // BACKGROUND THREAD
+    // ================================================================
 
-    // BackgroundThread
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "ui-worker");
         t.setDaemon(true);
         return t;
     });
 
-    //Status Label  (For App.java's setStatus() calls)
+    // ================================================================
+    // STATUS LABEL (For App.java's setStatus() calls)
+    // ================================================================
+
     private Label statusLabel;
+
+    // ================================================================
+    // DATA STORAGE
+    // ================================================================
 
     // DataStorage instance for reading user data from file
     private DataStorage dataStorage;
@@ -87,8 +104,10 @@ public class MainView extends BorderPane {
     // User data loaded from file (studentId -> password)
     private final Map<String, String> userCredentials = new HashMap<>();
 
+    // ================================================================
+    // CONSTRUCTOR
+    // ================================================================
 
-    // Constructor
     public MainView() {
         // Initialize DataStorage and load users from file
         initDataStorage();
@@ -112,15 +131,22 @@ public class MainView extends BorderPane {
         System.out.println("DEBUG: RAG is " + (rag == null ? "NULL" : "NOT NULL"));
     }
 
+    // ================================================================
+    // INIT DATA STORAGE - LOADS USERS FROM userData.txt
+    // ================================================================
 
-    // Loads users from userData.txt
+    /**
+     * Loads users from userData.txt
+     * File path: data/userData.txt (relative to project root)
+     * Format: studentId | studentName | studentPassword
+     */
     private void initDataStorage() {
         try {
-            // Create DataStorage with file paths
-            // DataStorage(String userDataFilePath, String bookingHistoryFilePath)
+            // ===== FIXED: CORRECT FILE PATH =====
+            // Files are in the 'data/' folder at project root
             dataStorage = new DataStorage(
-                    "reference-javafx-client/data/userData.txt",      // User data file
-                    "data/bookingHistory.txt" // Booking history file
+                    "data/userData.txt",      // ← CORRECT: User data file
+                    "data/bookingHistory.txt" // ← CORRECT: Booking history file
             );
 
             // Load students from userData.txt
@@ -147,7 +173,9 @@ public class MainView extends BorderPane {
         }
     }
 
-     //Fallback method for hardcoded test users if file loading fails.
+    /**
+     * Fallback method for hardcoded test users if file loading fails.
+     */
     private void initHardcodedTestUsers() {
         userCredentials.put("0375421", "password123");
         userCredentials.put("0377465", "password123");
@@ -158,7 +186,10 @@ public class MainView extends BorderPane {
         System.out.println("Loaded " + userCredentials.size() + " hardcoded test users");
     }
 
-    // Setup login action
+    // ================================================================
+    // SETUP LOGIN ACTION
+    // ================================================================
+
     private void setupLoginAction() {
         loginView.setLoginAction(() -> {
             loginView.clearFieldErrors();
@@ -192,13 +223,22 @@ public class MainView extends BorderPane {
         });
     }
 
-    //Validates a user against credentials loaded from userData.txt.
+    /**
+     * Validates a user against credentials loaded from userData.txt.
+     *
+     * @param id       Student ID to validate
+     * @param password Password to validate
+     * @return true if credentials match a user in the file, false otherwise
+     */
     private boolean isValidUser(String id, String password) {
         String expectedPassword = userCredentials.get(id);
         return expectedPassword != null && expectedPassword.equals(password);
     }
 
-    // Shared NavBar Builder
+    // ================================================================
+    // SHARED NAVBAR BUILDER
+    // ================================================================
+
     private void buildNavbar() {
         navbar = new HBox(10);
         navbar.setPadding(new Insets(8, 15, 8, 15));
@@ -256,7 +296,9 @@ public class MainView extends BorderPane {
         );
     }
 
-    // Creates 4 compact navigation button for main resource
+    /**
+     * Creates 4 compact navigation button for main resource
+     */
     private Button createNavButton(String text) {
         Button btn = new Button(text);
         btn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
@@ -291,7 +333,9 @@ public class MainView extends BorderPane {
         return btn;
     }
 
-    // Creates a button for Home and Logout.
+    /**
+     * Creates a button for Home and Logout.
+     */
     private Button createHomeLogoutButton(String text) {
         Button btn = new Button(text);
         btn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
@@ -325,21 +369,29 @@ public class MainView extends BorderPane {
         return btn;
     }
 
-    // Status Label (For App.java's setStatus() calls)
+    // ================================================================
+    // STATUS LABEL (For App.java's setStatus() calls)
+    // ================================================================
+
     private void buildStatusLabel() {
         statusLabel = new Label();
         statusLabel.setVisible(false);
         this.getChildren().add(statusLabel);
     }
 
-    // Sets the status message in the navbar.Called by App.java via view.setStatus()
+    /**
+     * Sets the status message in the navbar. Called by App.java via view.setStatus()
+     */
     public void setStatus(String message) {
         Platform.runLater(() -> {
             userInfoLabel.setText(message);
         });
     }
 
-    // View Builders
+    // ================================================================
+    // VIEW BUILDERS
+    // ================================================================
+
     private void buildLoginView() {
         loginView = new LoginView();
     }
@@ -464,13 +516,17 @@ public class MainView extends BorderPane {
         return card;
     }
 
-    // Creates the booking views
+    /**
+     * Creates the booking views
+     */
     private void buildBookingViews() {
         bookingView = new BookingView();
         viewBookingView = new ViewBookingView();
     }
 
-    // Creates the Policy Assistant view from Member 5.
+    /**
+     * Creates the Policy Assistant view from Member 5.
+     */
     private void buildFAQView() {
         // Create the FAQ view
         faqView = new FAQView();
@@ -504,7 +560,7 @@ public class MainView extends BorderPane {
         return box;
     }
 
-    // Navigation methods
+    // Navigation Methods
     public void showLogin() {
         setCenter(loginView);
         loginView.onShow();
@@ -512,7 +568,7 @@ public class MainView extends BorderPane {
         userInfoLabel.setText("");
     }
 
-    // Shows the home screen with resource cards.
+     // Shows home screen with resource cards
     public void showHome() {
         setCenter(homeContent);
         showAllNavButtons();
@@ -523,8 +579,7 @@ public class MainView extends BorderPane {
         }
     }
 
-
-    // Shows the Resource Booking screen
+     //Shows the Resource Booking screen
     public void showBooking() {
         if (bookingView != null) {
             setCenter(bookingView);
@@ -535,7 +590,7 @@ public class MainView extends BorderPane {
         }
     }
 
-    // Shows the Booking History screen
+     //Shows the Booking History screen
     public void showHistory() {
         if (viewBookingView != null) {
             setCenter(viewBookingView);
@@ -545,7 +600,7 @@ public class MainView extends BorderPane {
         }
     }
 
-    // Shows the Policy Assistant screen
+     //Shows the Policy Assistant screen
     public void showPolicy() {
         System.out.println("showPolicy() called");
         System.out.println("faqView is: " + (faqView == null ? "NULL" : "NOT NULL"));
@@ -582,7 +637,7 @@ public class MainView extends BorderPane {
         });
     }
 
-    // Helper methods
+    // HELPER METHODS
     public void showAllNavButtons() {
         homeBtn.setVisible(true);
         bookingBtn.setVisible(true);
@@ -642,7 +697,7 @@ public class MainView extends BorderPane {
         return rag;
     }
 
-    // Refresh Discovery (For debugging)
+    // REFRESH DISCOVERY (For debugging)
     public void refreshDiscovery() {
         if (mcp == null) {
             return;
