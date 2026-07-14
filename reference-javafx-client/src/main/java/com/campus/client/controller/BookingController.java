@@ -10,45 +10,68 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Handles everything that happens on the Resource Booking screen: picking a
- * resource, checking if it's free, and submitting the booking.
+ * Handles everything that happens on the Resource Booking screen.
  */
 public class BookingController {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
-    // CampusService writes new bookings with status 0 and cancelled ones with
-    // status 1 (see his bookResource()/cancelBooking()), so that's the convention we follow too
     private static final int STATUS_ACTIVE = 0;
 
     private final BookingView view;
     private final CampusService campusService;
 
-    // Real facility data, taken directly from facilities.txt. Note: D9A.01,
-    // D9B.01, E9A.03, E7.01, E7.02, and C7.01 currently fail a validation
-    // regex in the server's CampusTools.parseRooms() (it expects IDs shaped
-    // like "KA-P1", but these are shaped like "D9A.01") - booking those will
-    // show "Unknown resource" until that regex is fixed server-side. KA-P1,
-    // KA-P2, and SP-B1 already work correctly today.
+    /**
+     * ===== RESOURCE LIST (matches facilities.txt) =====
+     * These IDs are in DOT format as shown in the file.
+     */
     private final List<Resource> allResources = List.of(
+            // Discussion Rooms
             new Resource("D9A.01", "Discussion Room D9A.01", "D", 6),
             new Resource("D9B.01", "Discussion Room D9B.01", "D", 8),
             new Resource("E9A.03", "Discussion Room E9A.03", "E", 4),
+            // Group Study Rooms
             new Resource("E7.01", "Group Study Room E7.01", "E", 6),
             new Resource("E7.02", "Group Study Room E7.02", "E", 6),
+            // Computer Lab
             new Resource("C7.01", "Computer Lab C7.01", "LAB", 30),
+            // Study Pods (already dash format)
             new Resource("KA-P1", "Study Pod KA-P1", "LIB", 2),
             new Resource("KA-P2", "Study Pod KA-P2", "LIB", 1),
+            // Sports Facilities (already dash format)
             new Resource("SP-B1", "Basketball Court SP-B1", "OUT", 40)
     );
 
-    // whichever resources match the currently selected Resource Type
+    /**
+     * ===== MAPPING: DOT format → DASH format (for server compatibility) =====
+     *
+     * The server only accepts IDs with dashes: [A-Z]+-[A-Z0-9]+
+     * So we map dot IDs to dash IDs before sending to the server.
+     */
+    private final Map<String, String> resourceIdMapping = new HashMap<>();
+
+    {
+        // Map DOT format (shown in UI) to DASH format (sent to server)
+        resourceIdMapping.put("D9A.01", "D9A-P1");
+        resourceIdMapping.put("D9B.01", "D9B-P1");
+        resourceIdMapping.put("E9A.03", "E9A-P3");
+        resourceIdMapping.put("E7.01", "E7-P1");
+        resourceIdMapping.put("E7.02", "E7-P2");
+        resourceIdMapping.put("C7.01", "C7-P1");
+        // These already have dashes, so they map to themselves
+        resourceIdMapping.put("KA-P1", "KA-P1");
+        resourceIdMapping.put("KA-P2", "KA-P2");
+        resourceIdMapping.put("SP-B1", "SP-B1");
+    }
+
     private List<Resource> candidatesForSelectedType = List.of();
 
     private final ExecutorService worker = Executors.newCachedThreadPool(r -> {
@@ -61,24 +84,31 @@ public class BookingController {
         this.view = view;
         this.campusService = campusService;
         view.setController(this);
-        // no longer calling view.setResourceTypes() here - the Resource Type field
-        // is now locked and set directly by preselectResourceType() when a Home
-        // screen card is clicked, so there's no dropdown left to populate
     }
 
-    // Resource.java has no "type" field, so we guess it from the room's name just
-    // for filtering. Doesn't affect what actually gets sent to bookResource().
+    /**
+     * Derives the resource type from the resource ID.
+     */
     private String deriveType(Resource resource) {
+        String id = resource.getResourceId();
         String name = resource.getResourceName().toLowerCase();
+
+        // Check by ID pattern
+        if (id.startsWith("KA-")) return "Study Pod";
+        if (id.startsWith("SP-")) return "Sports Facility";
+        if (id.startsWith("C7.")) return "Lab Workstation";
+        if (id.startsWith("D9") || id.startsWith("E9") || id.startsWith("E7")) {
+            return "Discussion Room";
+        }
+
+        // Fallback by name
         if (name.contains("discussion")) return "Discussion Room";
         if (name.contains("pod") || name.contains("study")) return "Study Pod";
-        if (name.contains("lab") || name.contains("workstation")) return "Lab Workstation";
-        if (name.contains("sport") || name.contains("court") || name.contains("badminton")) return "Sports Facility";
+        if (name.contains("lab") || name.contains("computer")) return "Lab Workstation";
+        if (name.contains("sport") || name.contains("court")) return "Sports Facility";
         return "Other";
     }
 
-    // fired by BookingView.preselectResourceType() when the student arrives from
-    // a Home screen card - narrows the candidate list to that type
     public void handleResourceTypeChanged(String type) {
         candidatesForSelectedType = allResources.stream()
                 .filter(r -> deriveType(r).equals(type))
@@ -86,10 +116,6 @@ public class BookingController {
         view.updateResourceIdOptions(candidatesForSelectedType);
     }
 
-    // fired when the student clicks the Resource ID field. Actually pings the
-    // real server through CampusService.checkAvailability() - its response is
-    // just raw text though, so right now we use it to confirm the server's
-    // reachable before opening the picker, not to filter the table itself.
     public void handleCheckAvailability(String rawDate) {
         if (candidatesForSelectedType.isEmpty()) {
             view.setResourceIdError("Please select a resource type first");
@@ -98,7 +124,6 @@ public class BookingController {
 
         String dateError = validateDate(rawDate);
         if (dateError != null) {
-            // no date typed yet, just show what we have without bothering the server
             view.showAvailableResources(candidatesForSelectedType);
             return;
         }
@@ -117,8 +142,6 @@ public class BookingController {
         worker.submit(task);
     }
 
-    // fired when Submit Booking is clicked - validates everything, checks for
-    // duplicates, then actually books it
     public void handleBookResource(String resourceId, String studentId,
                                    String rawDate, String rawStartTime, String rawEndTime) {
 
@@ -169,35 +192,54 @@ public class BookingController {
         final LocalTime finalStart = start;
         final LocalTime finalEnd = end;
 
-        view.setFormEnabled(false); // lock the form + show the spinner while we wait
+        /**
+         * ===== THE FIX: Map dot ID to dash ID =====
+         * The server expects dash format (e.g., D9A-P1)
+         * We show dot format to the user (D9A.01) but send dash format to server.
+         */
+        String serverResourceId = resourceIdMapping.getOrDefault(resourceId, resourceId);
 
-        // duplicate check and the actual booking both happen off the UI thread,
-        // since the duplicate check reads bookingHistory.txt (real file I/O)
+        System.out.println("🔍 ===== BOOKING DEBUG =====");
+        System.out.println("🔍 UI Resource ID:    " + resourceId);
+        System.out.println("🔍 Server Resource ID: " + serverResourceId);
+        System.out.println("🔍 Student ID:        " + studentId);
+        System.out.println("🔍 Date:              " + rawDate);
+        System.out.println("🔍 Start Time:        " + rawStartTime);
+        System.out.println("🔍 End Time:          " + rawEndTime);
+        System.out.println("🔍 =======================");
+
+        view.setFormEnabled(false);
+
         Task<Booking> task = new Task<>() {
             @Override
             protected Booking call() throws Exception {
                 if (isDuplicateBooking(studentId, resourceId, finalDate, finalStart, finalEnd)) {
                     throw new DuplicateBookingException();
                 }
-                return campusService.bookResource(studentId, resourceId, finalDate, finalStart, finalEnd);
+                // Send the MAPPED ID to the server (dash format)
+                return campusService.bookResource(studentId, serverResourceId, finalDate, finalStart, finalEnd);
             }
         };
-        task.setOnSucceeded(e -> view.showBookingConfirmation(task.getValue().getBookingRef()));
+        task.setOnSucceeded(e -> {
+            Booking booking = task.getValue();
+            view.showBookingConfirmation(booking.getBookingRef());
+            view.setFormEnabled(true);
+        });
         task.setOnFailed(e -> {
             if (task.getException() instanceof DuplicateBookingException) {
                 view.showDuplicateWarning();
             } else {
-                // full detail stays in the console for debugging - the student
-                // just sees a clean, simple message, not raw exception text
-                System.err.println("Booking failed: " + task.getException());
+                System.err.println("❌ ===== BOOKING ERROR =====");
+                System.err.println("Error: " + task.getException());
+                task.getException().printStackTrace();
+                System.err.println("❌ =======================");
                 view.showError(friendlyMessage());
             }
+            view.setFormEnabled(true);
         });
         worker.submit(task);
     }
 
-    // CampusService doesn't have its own duplicate check, so we do it here by
-    // comparing against the student's existing bookings
     private boolean isDuplicateBooking(String studentId, String resourceId,
                                        LocalDate date, LocalTime start, LocalTime end) {
         for (Booking existing : campusService.getUserBookings(studentId)) {
@@ -212,7 +254,6 @@ public class BookingController {
         return false;
     }
 
-    // just a marker so we can tell "duplicate" apart from "actual server error" below
     private static class DuplicateBookingException extends RuntimeException {
     }
 
@@ -224,7 +265,7 @@ public class BookingController {
         try {
             date = LocalDate.parse(rawDate.trim(), DATE_FORMAT);
         } catch (DateTimeParseException ex) {
-            return "Invalid date format";
+            return "Invalid date format (use yyyy-MM-dd)";
         }
         if (date.isBefore(LocalDate.now())) {
             return "Date cannot be in the past";
@@ -239,14 +280,11 @@ public class BookingController {
         try {
             LocalTime.parse(rawTime.trim(), TIME_FORMAT);
         } catch (DateTimeParseException ex) {
-            return "Invalid time format";
+            return "Invalid time format (use HH:mm)";
         }
         return null;
     }
 
-    // FR9: one clean, simple message for the student - the real exception
-    // detail goes to System.err instead, so it's still there for debugging
-    // without cluttering the UI with technical text.
     private String friendlyMessage() {
         return "Unable to reach the campus server. Please check your connection and try again.";
     }

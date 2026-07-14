@@ -43,10 +43,8 @@ import java.util.stream.Collectors;
  */
 public class MainView extends BorderPane {
 
-    // ================================================================
-    // NAVBAR COMPONENTS
-    // ================================================================
 
+    // NAVBAR COMPONENTS
     private HBox navbar;
     private Circle mcpStatusIndicator;
     private Label mcpStatusLabel;
