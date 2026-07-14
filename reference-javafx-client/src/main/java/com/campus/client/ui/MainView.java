@@ -177,12 +177,8 @@ public class MainView extends BorderPane {
      * Fallback method for hardcoded test users if file loading fails.
      */
     private void initHardcodedTestUsers() {
-        userCredentials.put("0375421", "password123");
-        userCredentials.put("0377465", "password123");
-        userCredentials.put("0387332", "password123");
-        userCredentials.put("0376612", "password123");
-        userCredentials.put("0387409", "password123");
-        userCredentials.put("1234567", "test123");
+        userCredentials.put("S0375421", "Kent1234");
+        userCredentials.put("S0377465", "ven1234");
         System.out.println("Loaded " + userCredentials.size() + " hardcoded test users");
     }
 
@@ -568,7 +564,7 @@ public class MainView extends BorderPane {
         userInfoLabel.setText("");
     }
 
-     // Shows home screen with resource cards
+    // Shows home screen with resource cards
     public void showHome() {
         setCenter(homeContent);
         showAllNavButtons();
@@ -579,7 +575,7 @@ public class MainView extends BorderPane {
         }
     }
 
-     //Shows the Resource Booking screen
+    //Shows the Resource Booking screen
     public void showBooking() {
         if (bookingView != null) {
             setCenter(bookingView);
@@ -590,7 +586,7 @@ public class MainView extends BorderPane {
         }
     }
 
-     //Shows the Booking History screen
+    //Shows the Booking History screen
     public void showHistory() {
         if (viewBookingView != null) {
             setCenter(viewBookingView);
@@ -600,7 +596,7 @@ public class MainView extends BorderPane {
         }
     }
 
-     //Shows the Policy Assistant screen
+    //Shows the Policy Assistant screen
     public void showPolicy() {
         System.out.println("showPolicy() called");
         System.out.println("faqView is: " + (faqView == null ? "NULL" : "NOT NULL"));
