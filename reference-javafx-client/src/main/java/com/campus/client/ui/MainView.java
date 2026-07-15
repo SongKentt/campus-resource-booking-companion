@@ -36,6 +36,9 @@ import java.util.stream.Collectors;
  * Main navigation container for the Campus Resource Booking Companion.
  * Home screen shows a welcome message and 4 informational resource cards
  * with operating hours. Cards are for display only - users navigate via navbar.
+ *
+ * MCP status is independent of user login - it shows the actual connection
+ * state to the MCP server, not the user's session state.
  */
 public class MainView extends BorderPane {
 
@@ -622,7 +625,7 @@ public class MainView extends BorderPane {
     }
 
     // ================================================================
-    // LOGOUT (FR10)
+    // LOGOUT (FR10) - FIXED: MCP Status Stays Connected
     // ================================================================
 
     private void handleLogout() {
@@ -640,7 +643,9 @@ public class MainView extends BorderPane {
                 showLogin();
                 hideAllNavButtons();
                 userInfoLabel.setText("");
-                updateMCPStatus(false);
+                // ===== FIX: MCP connection is independent of user login =====
+                // Do NOT change MCP status on logout - it should stay connected
+                // updateMCPStatus(false);  // ← REMOVED
             }
         });
     }
