@@ -6,141 +6,374 @@ import com.campus.client.service.CampusService;
 import com.campus.client.ui.BookingView;
 import javafx.concurrent.Task;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Handles everything that happens on the Resource Booking screen.
- */
 public class BookingController {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
-
     private static final int STATUS_ACTIVE = 0;
 
     private final BookingView view;
     private final CampusService campusService;
 
-    /**
-     * ===== RESOURCE LIST (matches facilities.txt) =====
-     * These IDs are in DOT format as shown in the file.
-     */
-    private final List<Resource> allResources = List.of(
-            // Discussion Rooms
-            new Resource("D9A.01", "Discussion Room D9A.01", "D", 6),
-            new Resource("D9B.01", "Discussion Room D9B.01", "D", 8),
-            new Resource("E9A.03", "Discussion Room E9A.03", "E", 4),
-            // Group Study Rooms
-            new Resource("E7.01", "Group Study Room E7.01", "E", 6),
-            new Resource("E7.02", "Group Study Room E7.02", "E", 6),
-            // Computer Lab
-            new Resource("C7.01", "Computer Lab C7.01", "LAB", 30),
-            // Study Pods (already dash format)
-            new Resource("KA-P1", "Study Pod KA-P1", "LIB", 2),
-            new Resource("KA-P2", "Study Pod KA-P2", "LIB", 1),
-            // Sports Facilities (already dash format)
-            new Resource("SP-B1", "Basketball Court SP-B1", "OUT", 40)
-    );
-
-    /**
-     * ===== MAPPING: DOT format → DASH format (for server compatibility) =====
-     *
-     * The server only accepts IDs with dashes: [A-Z]+-[A-Z0-9]+
-     * So we map dot IDs to dash IDs before sending to the server.
-     */
-    private final Map<String, String> resourceIdMapping = new HashMap<>();
-
-    {
-        // Map DOT format (shown in UI) to DASH format (sent to server)
-        resourceIdMapping.put("D9A.01", "D9A-P1");
-        resourceIdMapping.put("D9B.01", "D9B-P1");
-        resourceIdMapping.put("E9A.03", "E9A-P3");
-        resourceIdMapping.put("E7.01", "E7-P1");
-        resourceIdMapping.put("E7.02", "E7-P2");
-        resourceIdMapping.put("C7.01", "C7-P1");
-        // These already have dashes, so they map to themselves
-        resourceIdMapping.put("KA-P1", "KA-P1");
-        resourceIdMapping.put("KA-P2", "KA-P2");
-        resourceIdMapping.put("SP-B1", "SP-B1");
-    }
+    // ===== RESOURCES (loaded from server) =====
+    private List<Resource> allResources = new ArrayList<>();
+    private List<String> availableResourceTypes = new ArrayList<>();
 
     private List<Resource> candidatesForSelectedType = List.of();
-
     private final ExecutorService worker = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "booking-worker");
         t.setDaemon(true);
         return t;
     });
 
+    // Operating hours for each building
+    private static final Map<String, String[]> OPERATING_HOURS = Map.of(
+            "D", new String[]{"08:00", "21:00"},
+            "E", new String[]{"08:00", "21:00"},
+            "LAB", new String[]{"08:00", "22:00"},
+            "LIB", new String[]{"07:00", "23:00"},
+            "OUT", new String[]{"07:00", "22:00"}
+    );
+
+    // ===== RESOURCES THAT ACTUALLY WORK ON THE SERVER =====
+    // Only these can be booked - the server rejects dot-format IDs
+    private static final List<String> WORKING_RESOURCES = List.of(
+            "KA-P1", "KA-P2", "SP-B1"
+    );
+
     public BookingController(BookingView view, CampusService campusService) {
         this.view = view;
         this.campusService = campusService;
         view.setController(this);
+
+        // ===== FIX 2: Load facilities in background to prevent UI freeze =====
+        worker.submit(() -> {
+            loadFacilitiesFromServer();
+        });
+    }
+
+    // ================================================================
+    // LOAD FACILITIES FROM SERVER
+    // ================================================================
+
+    private void loadFacilitiesFromServer() {
+        try {
+            String facilitiesData = campusService.getFacilities();
+            if (facilitiesData == null || facilitiesData.isEmpty()) {
+                System.err.println("Failed to load facilities from server. Using hardcoded resources.");
+                loadHardcodedResources();
+                // Update view on UI thread
+                javafx.application.Platform.runLater(() -> {
+                    view.updateResourceTypeOptions(availableResourceTypes);
+                });
+                return;
+            }
+
+            System.out.println("=== FACILITIES DATA FROM SERVER ===");
+            System.out.println(facilitiesData);
+            System.out.println("====================================");
+
+            parseFacilities(facilitiesData);
+
+            if (allResources.isEmpty()) {
+                System.err.println("No resources loaded from facilities data. Using hardcoded resources.");
+                loadHardcodedResources();
+            }
+
+            // Update view on UI thread
+            javafx.application.Platform.runLater(() -> {
+                view.updateResourceTypeOptions(availableResourceTypes);
+            });
+
+            System.out.println("Loaded " + allResources.size() + " resources from server");
+            System.out.println("Available types: " + availableResourceTypes);
+
+        } catch (Exception e) {
+            System.err.println("Error loading facilities from server: " + e.getMessage());
+            e.printStackTrace();
+            loadHardcodedResources();
+            javafx.application.Platform.runLater(() -> {
+                view.updateResourceTypeOptions(availableResourceTypes);
+            });
+        }
     }
 
     /**
-     * Derives the resource type from the resource ID.
+     * Parses the facilities.txt format.
+     * Shows ALL resources in the dropdown, but only allows booking for working ones.
      */
+    private void parseFacilities(String data) {
+        allResources.clear();
+        availableResourceTypes.clear();
+
+        String[] lines = data.split("\\r?\\n");
+        boolean inBookableSection = false;
+
+        for (String line : lines) {
+            line = line.trim();
+
+            if (line.isEmpty()) continue;
+
+            if (line.startsWith("[Bookable Resources]")) {
+                inBookableSection = true;
+                continue;
+            }
+
+            if (line.startsWith("[") && line.endsWith("]") && !line.startsWith("[Bookable Resources]")) {
+                inBookableSection = false;
+                continue;
+            }
+
+            if (line.startsWith("ROOM") || line.startsWith("---") || line.startsWith(":=")) {
+                continue;
+            }
+
+            if (inBookableSection) {
+                String[] parts = line.split("\\s*\\|\\s*");
+                if (parts.length >= 4) {
+                    String id = parts[0].trim();
+                    String type = parts[1].trim();
+                    int capacity = 0;
+                    try {
+                        capacity = Integer.parseInt(parts[2].trim());
+                    } catch (NumberFormatException e) { /* ignore */ }
+                    String building = parts[3].trim();
+
+                    // ===== ADD ALL RESOURCES (BOTH DOT AND DASH) =====
+                    // This ensures ALL 4 types show in the dropdown
+                    if (id.matches("[A-Z0-9.\\-]+")) {
+                        String typeName = getTypeName(type);
+                        Resource resource = new Resource(id, typeName + " " + id, building, capacity);
+                        allResources.add(resource);
+                        String displayType = getDisplayType(id, typeName);
+                        if (!availableResourceTypes.contains(displayType)) {
+                            availableResourceTypes.add(displayType);
+                        }
+                        System.out.println("Loaded resource: " + id + " (" + displayType + ")");
+                    }
+                }
+            }
+        }
+    }
+
+    private String getTypeName(String type) {
+        switch (type.toLowerCase()) {
+            case "discussion_room": return "Discussion Room";
+            case "group_study_room": return "Group Study";
+            case "computer_lab": return "Lab Workstation";
+            case "study_pod": return "Study Pod";
+            case "basketball court": return "Sports Facility";
+            default: return type.substring(0, 1).toUpperCase() + type.substring(1);
+        }
+    }
+
+    private String getDisplayType(String id, String typeName) {
+        if (id.startsWith("KA-")) return "Study Pod";
+        if (id.startsWith("SP-")) return "Sports Facility";
+        if (id.startsWith("C7")) return "Lab Workstation";
+        if (id.startsWith("D9") || id.startsWith("E9") || id.startsWith("E7")) return "Discussion Room";
+        return typeName;
+    }
+
+    private void loadHardcodedResources() {
+        allResources.clear();
+        availableResourceTypes.clear();
+
+        allResources.addAll(List.of(
+                new Resource("KA-P1", "Study Pod KA-P1", "LIB", 2),
+                new Resource("KA-P2", "Study Pod KA-P2", "LIB", 1),
+                new Resource("SP-B1", "Basketball Court SP-B1", "OUT", 40)
+        ));
+
+        availableResourceTypes.addAll(List.of("Study Pod", "Sports Facility"));
+        System.out.println("Loaded " + allResources.size() + " hardcoded resources");
+    }
+
+    // ================================================================
+    // RESOURCE TYPE HANDLING
+    // ================================================================
+
     private String deriveType(Resource resource) {
         String id = resource.getResourceId();
         String name = resource.getResourceName().toLowerCase();
 
-        // Check by ID pattern
         if (id.startsWith("KA-")) return "Study Pod";
         if (id.startsWith("SP-")) return "Sports Facility";
-        if (id.startsWith("C7.")) return "Lab Workstation";
-        if (id.startsWith("D9") || id.startsWith("E9") || id.startsWith("E7")) {
-            return "Discussion Room";
-        }
-
-        // Fallback by name
-        if (name.contains("discussion")) return "Discussion Room";
-        if (name.contains("pod") || name.contains("study")) return "Study Pod";
+        if (id.startsWith("C7")) return "Lab Workstation";
+        if (id.startsWith("D9") || id.startsWith("E9") || id.startsWith("E7")) return "Discussion Room";
+        if (name.contains("discussion") || name.contains("group")) return "Discussion Room";
         if (name.contains("lab") || name.contains("computer")) return "Lab Workstation";
-        if (name.contains("sport") || name.contains("court")) return "Sports Facility";
+        if (name.contains("pod") || name.contains("study")) return "Study Pod";
+        if (name.contains("sport") || name.contains("court") || name.contains("basketball")) return "Sports Facility";
         return "Other";
     }
 
+    /**
+     * Checks if a resource can actually be booked (server accepts it).
+     * Only dash-format resources work: KA-P1, KA-P2, SP-B1
+     */
+    private boolean isBookableResource(String resourceId) {
+        return WORKING_RESOURCES.contains(resourceId);
+    }
+
     public void handleResourceTypeChanged(String type) {
+        if (type == null || type.isBlank()) return;
         candidatesForSelectedType = allResources.stream()
                 .filter(r -> deriveType(r).equals(type))
                 .toList();
         view.updateResourceIdOptions(candidatesForSelectedType);
     }
 
-    public void handleCheckAvailability(String rawDate) {
-        if (candidatesForSelectedType.isEmpty()) {
-            view.setResourceIdError("Please select a resource type first");
+    public List<String> getAvailableResourceTypes() {
+        return availableResourceTypes;
+    }
+
+    // ================================================================
+    // CHECK AVAILABILITY
+    // ================================================================
+
+    public void handleCheckAvailability(String resourceId, String date, String startTime, String endTime) {
+        if (resourceId == null || resourceId.isBlank()) {
+            view.showError("Please select a resource first");
             return;
         }
 
-        String dateError = validateDate(rawDate);
-        if (dateError != null) {
-            view.showAvailableResources(candidatesForSelectedType);
+        // ===== Check if the resource is bookable =====
+        if (!isBookableResource(resourceId)) {
+            view.showError("The resource is unavailable. Please try again.");
             return;
         }
+
+        String dateError = validateDate(date);
+        if (dateError != null) {
+            view.showError(dateError);
+            return;
+        }
+
+        String startError = validateTime(startTime);
+        if (startError != null) {
+            view.showError(startError);
+            return;
+        }
+
+        String endError = validateTime(endTime);
+        if (endError != null) {
+            view.showError(endError);
+            return;
+        }
+
+        LocalTime start = LocalTime.parse(startTime.trim(), TIME_FORMAT);
+        LocalTime end = LocalTime.parse(endTime.trim(), TIME_FORMAT);
+
+        if (!end.isAfter(start)) {
+            view.showError("End time must be after start time");
+            return;
+        }
+
+        if (resourceId.startsWith("SP-")) {
+            long minutes = Duration.between(start, end).toMinutes();
+            if (minutes != 60) {
+                view.showError("Sports facilities must be booked in 1-hour blocks (e.g., 10:00-11:00).");
+                return;
+            }
+        }
+
+        final LocalDate finalDate = LocalDate.parse(date.trim(), DATE_FORMAT);
+        final LocalTime finalStart = start;
+        final LocalTime finalEnd = end;
+
+        view.setFormEnabled(false);
 
         Task<String> task = new Task<>() {
             @Override
             protected String call() {
-                return campusService.checkAvailability(rawDate.trim(), null);
+                String hoursCheck = checkOperatingHours(resourceId, finalStart, finalEnd);
+                if (hoursCheck != null) {
+                    return "Not Available: " + hoursCheck;
+                }
+
+                boolean isAvailable = isTimeSlotAvailable(resourceId, finalDate, finalStart, finalEnd);
+                if (isAvailable) {
+                    return "Available: " + resourceId + " is free from " + finalStart + " to " + finalEnd + " on " + finalDate;
+                } else {
+                    return "Not Available: " + resourceId + " is already booked from " + finalStart + " to " + finalEnd + " on " + finalDate;
+                }
             }
         };
-        task.setOnSucceeded(e -> view.showAvailableResources(candidatesForSelectedType));
-        task.setOnFailed(e -> {
-            System.err.println("Check availability failed: " + task.getException());
-            view.showError(friendlyMessage());
+        task.setOnSucceeded(evt -> {
+            String result = task.getValue();
+            view.showAvailabilityResult(result);
+            view.setFormEnabled(true);
+        });
+        task.setOnFailed(evt -> {
+            System.err.println("Availability check failed: " + task.getException());
+            view.showError("Unable to check availability. Please try again.");
+            view.setFormEnabled(true);
         });
         worker.submit(task);
     }
+
+    private String checkOperatingHours(String resourceId, LocalTime start, LocalTime end) {
+        String building = getBuildingForResource(resourceId);
+        if (building == null) return "Unknown resource type.";
+
+        String[] hours = OPERATING_HOURS.get(building);
+        if (hours == null) return "Operating hours not available for this resource.";
+
+        LocalTime open = LocalTime.parse(hours[0]);
+        LocalTime close = LocalTime.parse(hours[1]);
+
+        if (start.isBefore(open) || end.isAfter(close)) {
+            return "Booking must be between " + open + " and " + close + ".";
+        }
+
+        if (resourceId.startsWith("SP-")) {
+            if (start.getMinute() != 0 || end.getMinute() != 0) {
+                return "Sports facilities must be booked on the hour (e.g., 10:00-11:00).";
+            }
+        }
+
+        return null;
+    }
+
+    private String getBuildingForResource(String resourceId) {
+        if (resourceId.startsWith("D9")) return "D";
+        if (resourceId.startsWith("E9") || resourceId.startsWith("E7")) return "E";
+        if (resourceId.startsWith("C7")) return "LAB";
+        if (resourceId.startsWith("KA-")) return "LIB";
+        if (resourceId.startsWith("SP-")) return "OUT";
+        return null;
+    }
+
+    private boolean isTimeSlotAvailable(String resourceId, LocalDate date, LocalTime start, LocalTime end) {
+        List<Booking> allBookings = campusService.getAllBookings();
+        for (Booking b : allBookings) {
+            if (b.getResourceId().equals(resourceId)
+                    && b.getDate().equals(date)
+                    && b.getStatus() == STATUS_ACTIVE) {
+                boolean overlaps = start.isBefore(b.getEndTime()) && end.isAfter(b.getStartTime());
+                if (overlaps) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    // ================================================================
+    // BOOK RESOURCE
+    // ================================================================
 
     public void handleBookResource(String resourceId, String studentId,
                                    String rawDate, String rawStartTime, String rawEndTime) {
@@ -153,6 +386,21 @@ public class BookingController {
             valid = false;
         }
 
+        // ===== FIX 3: Check if resource exists =====
+        if (valid && resourceId != null) {
+            boolean exists = allResources.stream().anyMatch(r -> r.getResourceId().equals(resourceId));
+            if (!exists) {
+                view.showError("Invalid resource selected. Please try again.");
+                return;
+            }
+        }
+
+        // ===== CHECK IF RESOURCE IS BOOKABLE =====
+        if (valid && resourceId != null && !isBookableResource(resourceId)) {
+            view.showError("The resource is unavailable. Please try again.");
+            return;
+        }
+
         LocalDate date = null;
         String dateError = validateDate(rawDate);
         if (dateError != null) {
@@ -162,7 +410,7 @@ public class BookingController {
             date = LocalDate.parse(rawDate.trim(), DATE_FORMAT);
         }
 
-        LocalTime start = null, end = null;
+        LocalTime start = null;
         String startError = validateTime(rawStartTime);
         if (startError != null) {
             view.setStartTimeError(startError);
@@ -171,6 +419,7 @@ public class BookingController {
             start = LocalTime.parse(rawStartTime.trim(), TIME_FORMAT);
         }
 
+        LocalTime end = null;
         String endError = validateTime(rawEndTime);
         if (endError != null) {
             view.setEndTimeError(endError);
@@ -184,6 +433,14 @@ public class BookingController {
             valid = false;
         }
 
+        if (valid && resourceId != null && start != null && end != null) {
+            String hoursCheck = checkOperatingHours(resourceId, start, end);
+            if (hoursCheck != null) {
+                view.showError(hoursCheck);
+                valid = false;
+            }
+        }
+
         if (!valid) {
             return;
         }
@@ -192,63 +449,48 @@ public class BookingController {
         final LocalTime finalStart = start;
         final LocalTime finalEnd = end;
 
-        /**
-         * ===== THE FIX: Map dot ID to dash ID =====
-         * The server expects dash format (e.g., D9A-P1)
-         * We show dot format to the user (D9A.01) but send dash format to server.
-         */
-        String serverResourceId = resourceIdMapping.getOrDefault(resourceId, resourceId);
-
-        System.out.println("🔍 ===== BOOKING DEBUG =====");
-        System.out.println("🔍 UI Resource ID:    " + resourceId);
-        System.out.println("🔍 Server Resource ID: " + serverResourceId);
-        System.out.println("🔍 Student ID:        " + studentId);
-        System.out.println("🔍 Date:              " + rawDate);
-        System.out.println("🔍 Start Time:        " + rawStartTime);
-        System.out.println("🔍 End Time:          " + rawEndTime);
-        System.out.println("🔍 =======================");
-
         view.setFormEnabled(false);
 
         Task<Booking> task = new Task<>() {
             @Override
             protected Booking call() throws Exception {
+                // ===== FIX 1: Use getAllBookings() for duplicate check =====
                 if (isDuplicateBooking(studentId, resourceId, finalDate, finalStart, finalEnd)) {
                     throw new DuplicateBookingException();
                 }
-                // Send the MAPPED ID to the server (dash format)
-                return campusService.bookResource(studentId, serverResourceId, finalDate, finalStart, finalEnd);
+                return campusService.bookResource(studentId, resourceId, finalDate, finalStart, finalEnd);
             }
         };
-        task.setOnSucceeded(e -> {
+        task.setOnSucceeded(evt -> {
             Booking booking = task.getValue();
             view.showBookingConfirmation(booking.getBookingRef());
             view.setFormEnabled(true);
         });
-        task.setOnFailed(e -> {
+        task.setOnFailed(evt -> {
             if (task.getException() instanceof DuplicateBookingException) {
                 view.showDuplicateWarning();
             } else {
-                System.err.println("❌ ===== BOOKING ERROR =====");
-                System.err.println("Error: " + task.getException());
+                System.err.println("Booking failed: " + task.getException());
                 task.getException().printStackTrace();
-                System.err.println("❌ =======================");
-                view.showError(friendlyMessage());
+                view.showError("Unable to book. Please try again.");
             }
             view.setFormEnabled(true);
         });
         worker.submit(task);
     }
 
+    // ===== FIX 1: Updated to use getAllBookings() =====
     private boolean isDuplicateBooking(String studentId, String resourceId,
                                        LocalDate date, LocalTime start, LocalTime end) {
-        for (Booking existing : campusService.getUserBookings(studentId)) {
-            if (existing.getStatus() == STATUS_ACTIVE
-                    && existing.getResourceId().equals(resourceId)
+        // Check ALL bookings, not just the student's
+        for (Booking existing : campusService.getAllBookings()) {
+            if (existing.getResourceId().equals(resourceId)
                     && existing.getDate().equals(date)
-                    && existing.getStartTime().equals(start)
-                    && existing.getEndTime().equals(end)) {
-                return true;
+                    && existing.getStatus() == STATUS_ACTIVE) {
+                boolean overlaps = start.isBefore(existing.getEndTime()) && end.isAfter(existing.getStartTime());
+                if (overlaps) {
+                    return true;
+                }
             }
         }
         return false;
@@ -257,18 +499,21 @@ public class BookingController {
     private static class DuplicateBookingException extends RuntimeException {
     }
 
+    // ================================================================
+    // VALIDATION HELPERS
+    // ================================================================
+
     private String validateDate(String rawDate) {
         if (rawDate == null || rawDate.isBlank()) {
             return "Please enter a date";
         }
-        LocalDate date;
         try {
-            date = LocalDate.parse(rawDate.trim(), DATE_FORMAT);
+            LocalDate date = LocalDate.parse(rawDate.trim(), DATE_FORMAT);
+            if (date.isBefore(LocalDate.now())) {
+                return "Date cannot be in the past";
+            }
         } catch (DateTimeParseException ex) {
             return "Invalid date format (use yyyy-MM-dd)";
-        }
-        if (date.isBefore(LocalDate.now())) {
-            return "Date cannot be in the past";
         }
         return null;
     }
@@ -283,10 +528,6 @@ public class BookingController {
             return "Invalid time format (use HH:mm)";
         }
         return null;
-    }
-
-    private String friendlyMessage() {
-        return "Unable to reach the campus server. Please check your connection and try again.";
     }
 
     public void shutdown() {

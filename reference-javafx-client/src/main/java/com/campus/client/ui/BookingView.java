@@ -2,447 +2,509 @@ package com.campus.client.ui;
 
 import com.campus.client.controller.BookingController;
 import com.campus.client.model.Resource;
-import javafx.collections.FXCollections;
-import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.*;
-import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
+import javafx.scene.Node;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.stage.Popup;
 
 import java.util.List;
 
-/**
- * The Resource Booking screen - lets a student pick a resource type, pick an
- * actual resource, and submit a booking (FR2, FR3).
- *
- * NAVBAR: This screen does NOT have its own navbar.
- * It relies on MainView's shared navbar for navigation.
- */
 public class BookingView extends BaseView {
+
+    // ================================================================
+    // UI COMPONENTS
+    // ================================================================
+
+    private ComboBox<String> resourceTypeCombo;
+    private ComboBox<String> resourceIdCombo;
+    private TextField studentIdField;
+    private TextField dateField;
+    private TextField startTimeField;
+    private TextField endTimeField;
+
+    private Label resourceIdError;
+    private Label dateError;
+    private Label startTimeError;
+    private Label endTimeError;
+
+    private Button checkAvailabilityButton;
+    private Button submitButton;
 
     private BookingController controller;
 
-    // form fields
-    private final Label resourceTypeField = new Label(); // static display only, set by the Home screen card clicked
-    private final TextField resourceIdField = new TextField();
-    private String selectedResourceId;
-
-    private final Label studentIdField = new Label(); // static display only, filled in after login
-    private final TextField dateField = new TextField();
-    private final TextField startTimeField = new TextField();
-    private final TextField endTimeField = new TextField();
-    private final Button submitButton = new Button("Submit Booking");
-
-    // inline error messages under each field
-    private final Label resourceTypeError = new Label();
-    private final Label resourceIdError   = new Label();
-    private final Label studentIdError    = new Label();
-    private final Label dateError         = new Label();
-    private final Label startTimeError    = new Label();
-    private final Label endTimeError      = new Label();
-
-    // popup that shows up when you click the resource ID field
-    private final Popup resourceIdPopup = new Popup();
-    private final TableView<Resource> resourceIdTable = new TableView<>();
-
-    // small floating card that shows the booking result
-    private final Label confirmationLabel = new Label();
-    private final Button confirmationButton = new Button("OK");
-    private final VBox confirmationCard = new VBox(10, confirmationLabel, confirmationButton);
-
-    private final ProgressIndicator loadingIndicator = new ProgressIndicator();
+    // ================================================================
+    // CONSTRUCTOR
+    // ================================================================
 
     public BookingView() {
-        buildLayout();
-        wireEvents();
+        buildUI();
+    }
+
+    // ================================================================
+    // UI BUILDER
+    // ================================================================
+
+    private void buildUI() {
+        setPadding(new Insets(30));
+        setSpacing(20);
+        setAlignment(Pos.TOP_CENTER);
+        setStyle("-fx-background-color: #F8F9FA;");
+
+        // ---- Title ----
+        Label titleLabel = new Label("Book a Resource");
+        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 22));
+        titleLabel.setStyle("-fx-text-fill: #2C3E50;");
+        VBox.setMargin(titleLabel, new Insets(0, 0, 20, 0));
+
+        // ---- Form Grid ----
+        GridPane form = new GridPane();
+        form.setHgap(15);
+        form.setVgap(10);
+        form.setAlignment(Pos.CENTER);
+        form.setPadding(new Insets(20));
+        form.setStyle("-fx-background-color: white; -fx-background-radius: 10; " +
+                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 10, 0, 0, 4);");
+
+        int row = 0;
+
+        // ---- Resource Type ----
+        Label typeLabel = createLabel("Resource Type *");
+        resourceTypeCombo = new ComboBox<>();
+        // ===== REMOVED HARDCODED ITEMS - populated by controller =====
+        resourceTypeCombo.setPromptText("Loading resources...");
+        resourceTypeCombo.setPrefWidth(250);
+        resourceTypeCombo.setDisable(true);
+        resourceTypeCombo.setOnAction(evt -> {
+            if (controller != null && resourceTypeCombo.getValue() != null) {
+                controller.handleResourceTypeChanged(resourceTypeCombo.getValue());
+            }
+        });
+
+        VBox typeBox = new VBox(2);
+        typeBox.setAlignment(Pos.CENTER_LEFT);
+        typeBox.getChildren().add(resourceTypeCombo);
+
+        form.add(typeLabel, 0, row);
+        form.add(typeBox, 1, row);
+        GridPane.setValignment(typeBox, javafx.geometry.VPos.CENTER);
+        row++;
+
+        // ---- Resource ID ----
+        Label idLabel = createLabel("Resource ID *");
+        resourceIdCombo = new ComboBox<>();
+        resourceIdCombo.setPromptText("Select a resource");
+        resourceIdCombo.setPrefWidth(250);
+        resourceIdCombo.setDisable(true);
+
+        resourceIdError = new Label();
+        resourceIdError.setStyle("-fx-text-fill: #C0392B; -fx-font-size: 11px;");
+        resourceIdError.setVisible(false);
+
+        VBox idBox = new VBox(2);
+        idBox.setAlignment(Pos.CENTER_LEFT);
+        idBox.getChildren().addAll(resourceIdCombo, resourceIdError);
+
+        form.add(idLabel, 0, row);
+        form.add(idBox, 1, row);
+        GridPane.setValignment(idBox, javafx.geometry.VPos.CENTER);
+        row++;
+
+        // ---- Student ID ----
+        Label studentLabel = createLabel("Student ID *");
+        studentIdField = new TextField();
+        studentIdField.setPromptText("Enter your Student ID");
+        studentIdField.setPrefWidth(250);
+        studentIdField.setEditable(false);
+        studentIdField.setStyle("-fx-background-color: #f0f0f0;");
+
+        form.add(studentLabel, 0, row);
+        form.add(studentIdField, 1, row);
+        GridPane.setValignment(studentIdField, javafx.geometry.VPos.CENTER);
+        row++;
+
+        // ---- Booking Date ----
+        Label dateLabel = createLabel("Booking Date *");
+        dateField = new TextField();
+        dateField.setPromptText("yyyy-MM-dd");
+        dateField.setPrefWidth(250);
+
+        dateError = new Label();
+        dateError.setStyle("-fx-text-fill: #C0392B; -fx-font-size: 11px;");
+        dateError.setVisible(false);
+
+        VBox dateBox = new VBox(2);
+        dateBox.setAlignment(Pos.CENTER_LEFT);
+        dateBox.getChildren().addAll(dateField, dateError);
+
+        form.add(dateLabel, 0, row);
+        form.add(dateBox, 1, row);
+        GridPane.setValignment(dateBox, javafx.geometry.VPos.CENTER);
+        row++;
+
+        // ---- Start Time ----
+        Label startLabel = createLabel("Start Time *");
+        startTimeField = new TextField();
+        startTimeField.setPromptText("HH:mm");
+        startTimeField.setPrefWidth(250);
+
+        startTimeError = new Label();
+        startTimeError.setStyle("-fx-text-fill: #C0392B; -fx-font-size: 11px;");
+        startTimeError.setVisible(false);
+
+        VBox startBox = new VBox(2);
+        startBox.setAlignment(Pos.CENTER_LEFT);
+        startBox.getChildren().addAll(startTimeField, startTimeError);
+
+        form.add(startLabel, 0, row);
+        form.add(startBox, 1, row);
+        GridPane.setValignment(startBox, javafx.geometry.VPos.CENTER);
+        row++;
+
+        // ---- End Time ----
+        Label endLabel = createLabel("End Time *");
+        endTimeField = new TextField();
+        endTimeField.setPromptText("HH:mm");
+        endTimeField.setPrefWidth(250);
+
+        endTimeError = new Label();
+        endTimeError.setStyle("-fx-text-fill: #C0392B; -fx-font-size: 11px;");
+        endTimeError.setVisible(false);
+
+        VBox endBox = new VBox(2);
+        endBox.setAlignment(Pos.CENTER_LEFT);
+        endBox.getChildren().addAll(endTimeField, endTimeError);
+
+        form.add(endLabel, 0, row);
+        form.add(endBox, 1, row);
+        GridPane.setValignment(endBox, javafx.geometry.VPos.CENTER);
+        row++;
+
+        // ---- Buttons Row ----
+        HBox buttonRow = new HBox(15);
+        buttonRow.setAlignment(Pos.CENTER);
+        buttonRow.setPadding(new Insets(15, 0, 0, 0));
+
+        checkAvailabilityButton = new Button("Check Availability");
+        checkAvailabilityButton.setStyle(
+                "-fx-background-color: #3498DB; -fx-text-fill: white; " +
+                        "-fx-font-size: 13px; -fx-padding: 8 20; -fx-background-radius: 6; " +
+                        "-fx-cursor: hand;"
+        );
+        checkAvailabilityButton.setOnMouseEntered(evt -> checkAvailabilityButton.setStyle(
+                "-fx-background-color: #2980B9; -fx-text-fill: white; " +
+                        "-fx-font-size: 13px; -fx-padding: 8 20; -fx-background-radius: 6; " +
+                        "-fx-cursor: hand;"
+        ));
+        checkAvailabilityButton.setOnMouseExited(evt -> checkAvailabilityButton.setStyle(
+                "-fx-background-color: #3498DB; -fx-text-fill: white; " +
+                        "-fx-font-size: 13px; -fx-padding: 8 20; -fx-background-radius: 6; " +
+                        "-fx-cursor: hand;"
+        ));
+        checkAvailabilityButton.setOnAction(evt -> handleCheckAvailability());
+
+        submitButton = new Button("Submit Booking");
+        submitButton.setStyle(
+                "-fx-background-color: #2ECC71; -fx-text-fill: white; " +
+                        "-fx-font-size: 13px; -fx-padding: 8 20; -fx-background-radius: 6; " +
+                        "-fx-cursor: hand;"
+        );
+        submitButton.setOnMouseEntered(evt -> submitButton.setStyle(
+                "-fx-background-color: #27AE60; -fx-text-fill: white; " +
+                        "-fx-font-size: 13px; -fx-padding: 8 20; -fx-background-radius: 6; " +
+                        "-fx-cursor: hand;"
+        ));
+        submitButton.setOnMouseExited(evt -> submitButton.setStyle(
+                "-fx-background-color: #2ECC71; -fx-text-fill: white; " +
+                        "-fx-font-size: 13px; -fx-padding: 8 20; -fx-background-radius: 6; " +
+                        "-fx-cursor: hand;"
+        ));
+        submitButton.setOnAction(evt -> handleSubmitBooking());
+
+        buttonRow.getChildren().addAll(checkAvailabilityButton, submitButton);
+        form.add(buttonRow, 0, row, 2, 1);
+        GridPane.setValignment(buttonRow, javafx.geometry.VPos.CENTER);
+        row++;
+
+        // ---- Assemble ----
+        VBox contentBox = new VBox(titleLabel, form);
+        contentBox.setAlignment(Pos.TOP_CENTER);
+        contentBox.setMaxWidth(700);
+        getChildren().add(contentBox);
+    }
+
+    // ================================================================
+    // HELPER METHODS
+    // ================================================================
+
+    private Label createLabel(String text) {
+        Label label = new Label(text);
+        label.setFont(Font.font("System", FontWeight.BOLD, 13));
+        label.setAlignment(Pos.CENTER_LEFT);
+        return label;
+    }
+
+    // ================================================================
+    // PUBLIC METHODS FOR CONTROLLER
+    // ================================================================
+
+    /**
+     * ===== ADD THIS METHOD =====
+     * Updates the resource type dropdown with available types from the controller.
+     * This makes the dropdown dynamic based on what's loaded from facilities.txt.
+     */
+    public void updateResourceTypeOptions(List<String> types) {
+        resourceTypeCombo.getItems().clear();
+        if (types != null && !types.isEmpty()) {
+            resourceTypeCombo.getItems().addAll(types);
+            resourceTypeCombo.setPromptText("Select a resource type");
+            resourceTypeCombo.setDisable(false);
+        } else {
+            resourceTypeCombo.setPromptText("No resources available");
+            resourceTypeCombo.setDisable(true);
+        }
     }
 
     public void setController(BookingController controller) {
         this.controller = controller;
     }
 
-    @Override
-    public void onShow() {
-        clearAllErrors();
-        hideConfirmationCard();
-    }
-
-    @Override
-    public void onHide() {
-    }
-
-    // ---------------------------------------------------------------
-    // building the screen
-    // ---------------------------------------------------------------
-
-    private void buildLayout() {
-        setStyle("-fx-background-color: #f5f5f5;");
-
-        VBox formCard = buildFormCard();
-        buildResourceIdPopup();
-        buildConfirmationCard();
-
-        StackPane formWrapper = new StackPane(formCard);
-        formWrapper.setPadding(new Insets(30));
-
-        ScrollPane scrollPane = new ScrollPane(formWrapper);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setFitToHeight(true);
-        scrollPane.setStyle("-fx-background: #f5f5f5; -fx-background-color: #f5f5f5;");
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-
-        StackPane contentStack = new StackPane(scrollPane, confirmationCard);
-        StackPane.setAlignment(confirmationCard, Pos.CENTER);
-        VBox.setVgrow(contentStack, Priority.ALWAYS);
-
-        // REMOVED: buildNavBar() - uses MainView's shared navbar
-        getChildren().addAll(buildHeroBanner("Book a Resource"), contentStack);
-    }
-
-    /** Navy title banner under the navbar. */
-    private VBox buildHeroBanner(String title) {
-        Label titleLabel = new Label(title);
-        titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 26));
-        titleLabel.setTextFill(Color.WHITE);
-
-        VBox banner = new VBox(titleLabel);
-        banner.setAlignment(Pos.CENTER);
-        banner.setPrefHeight(130);
-        banner.setStyle("-fx-background-color: #1F3864;");
-        return banner;
-    }
-
-    private VBox buildFormCard() {
-        resourceTypeField.setStyle("-fx-background-color: #F0F0F0; -fx-background-radius: 3; "
-                + "-fx-border-color: #C0C0C0; -fx-border-radius: 3; -fx-padding: 6 10 6 10;");
-        resourceTypeField.setMaxWidth(Double.MAX_VALUE);
-        styleErrorLabel(resourceTypeError);
-
-        resourceIdField.setEditable(false);
-        resourceIdField.setPromptText("Click to select a resource");
-        resourceIdField.setMaxWidth(Double.MAX_VALUE);
-        styleErrorLabel(resourceIdError);
-
-        studentIdField.setStyle("-fx-background-color: #F0F0F0; -fx-background-radius: 3; "
-                + "-fx-border-color: #C0C0C0; -fx-border-radius: 3; -fx-padding: 6 10 6 10;");
-        studentIdField.setMaxWidth(Double.MAX_VALUE);
-        styleErrorLabel(studentIdError);
-
-        dateField.setPromptText("yyyy-MM-dd");
-        styleErrorLabel(dateError);
-        startTimeField.setPromptText("hh:MM");
-        styleErrorLabel(startTimeError);
-        endTimeField.setPromptText("hh:MM");
-        styleErrorLabel(endTimeError);
-
-        submitButton.setPrefWidth(220);
-        submitButton.setFont(Font.font("Arial", FontWeight.BOLD, 13));
-        submitButton.setPrefHeight(40);
-        submitButton.setStyle("-fx-background-color: #1F3864; -fx-text-fill: white; "
-                + "-fx-background-radius: 4;");
-
-        loadingIndicator.setMaxSize(28, 28);
-        loadingIndicator.setVisible(false);
-        HBox submitRow = new HBox(12, submitButton, loadingIndicator);
-        submitRow.setAlignment(Pos.CENTER);
-
-        GridPane grid = new GridPane();
-        grid.setHgap(24);
-        grid.setVgap(4);
-        grid.getColumnConstraints().addAll(columnPercent(50), columnPercent(50));
-        grid.add(fieldBlock("Resource Type *", resourceTypeField, resourceTypeError), 0, 0);
-        grid.add(fieldBlock("Resource ID *", resourceIdField, resourceIdError), 1, 0);
-        grid.add(fieldBlock("Student ID *", studentIdField, studentIdError), 0, 1);
-        grid.add(fieldBlock("Booking Date *", dateField, dateError), 1, 1);
-        grid.add(fieldBlock("Start Time *", startTimeField, startTimeError), 0, 2);
-        grid.add(fieldBlock("End Time *", endTimeField, endTimeError), 1, 2);
-
-        VBox formCard = new VBox(20, grid, new Separator(), submitRow);
-        formCard.setAlignment(Pos.CENTER);
-        formCard.setPadding(new Insets(24, 40, 24, 40));
-        formCard.setMaxWidth(640);
-        formCard.setStyle("-fx-background-color: white; -fx-background-radius: 8; "
-                + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 8, 0, 0, 2);");
-        return formCard;
-    }
-
-    private VBox fieldBlock(String labelText, Control field, Label errorLabel) {
-        Label label = new Label(labelText);
-        label.setFont(Font.font("Arial", FontWeight.BOLD, 12));
-        label.setTextFill(Color.web("#333333"));
-        return new VBox(4, label, field, errorLabel);
-    }
-
-    private ColumnConstraints columnPercent(double percent) {
-        ColumnConstraints c = new ColumnConstraints();
-        c.setPercentWidth(percent);
-        return c;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void buildResourceIdPopup() {
-        TableColumn<Resource, String> idCol = new TableColumn<>("Resource ID");
-        idCol.setCellValueFactory(new PropertyValueFactory<>("resourceId"));
-
-        TableColumn<Resource, String> nameCol = new TableColumn<>("Name");
-        nameCol.setCellValueFactory(new PropertyValueFactory<>("resourceName"));
-
-        TableColumn<Resource, String> buildingCol = new TableColumn<>("Building");
-        buildingCol.setCellValueFactory(new PropertyValueFactory<>("building"));
-
-        TableColumn<Resource, Number> capacityCol = new TableColumn<>("Capacity");
-        capacityCol.setCellValueFactory(new PropertyValueFactory<>("capacity"));
-
-        resourceIdTable.getColumns().setAll(List.of(idCol, nameCol, buildingCol, capacityCol));
-        resourceIdTable.setPrefSize(400, 160);
-        resourceIdTable.setPlaceholder(new Label("No resources available"));
-        resourceIdTable.setStyle("-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 10, 0, 0, 3);");
-
-        resourceIdTable.setRowFactory(tv -> {
-            TableRow<Resource> row = new TableRow<>();
-            row.setOnMouseClicked(e -> {
-                if (!row.isEmpty()) {
-                    selectResourceId(row.getItem());
-                }
-            });
-            return row;
-        });
-
-        resourceIdPopup.getContent().add(resourceIdTable);
-        resourceIdPopup.setAutoHide(true);
-    }
-
-    private void selectResourceId(Resource resource) {
-        selectedResourceId = resource.getResourceId();
-        resourceIdField.setText(resource.getResourceId() + " - " + resource.getResourceName());
-        resourceIdPopup.hide();
-    }
-
-    private void checkAvailability() {
-        if (controller != null) {
-            controller.handleCheckAvailability(dateField.getText().trim());
-        }
-    }
-
-    private void openResourceIdPopup() {
-        if (resourceIdTable.getItems().isEmpty()) {
-            resourceIdError.setText("No resources are free on the selected date");
-            resourceIdError.setVisible(true);
-            return;
-        }
-        Bounds bounds = resourceIdField.localToScreen(resourceIdField.getBoundsInLocal());
-        resourceIdPopup.show(resourceIdField, bounds.getMinX(), bounds.getMaxY());
-    }
-
-    private void buildConfirmationCard() {
-        confirmationLabel.setWrapText(true);
-        confirmationLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
-        confirmationLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
-
-        confirmationButton.setPrefWidth(100);
-        confirmationButton.setStyle("-fx-background-color: #1F3864; -fx-text-fill: white; "
-                + "-fx-background-radius: 4;");
-        confirmationButton.setOnAction(e -> hideConfirmationCard());
-
-        confirmationCard.setAlignment(Pos.CENTER);
-        confirmationCard.setMaxWidth(240);
-        confirmationCard.setMaxHeight(Region.USE_PREF_SIZE);
-        confirmationCard.setPadding(new Insets(16));
-        confirmationCard.setStyle("-fx-background-color: white; -fx-background-radius: 8; "
-                + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 12, 0, 0, 3);");
-
-        confirmationCard.setVisible(false);
-        confirmationCard.setManaged(false);
-    }
-
-    private void showConfirmationCard() {
-        confirmationCard.setVisible(true);
-        confirmationCard.setManaged(true);
-    }
-
-    private void hideConfirmationCard() {
-        confirmationCard.setVisible(false);
-        confirmationCard.setManaged(false);
-    }
-
-    private void wireEvents() {
-        resourceIdField.setOnMouseClicked(e -> {
-            clearAllErrors();
-            if (resourceIdPopup.isShowing()) {
-                resourceIdPopup.hide();
-                return;
-            }
-            checkAvailability();
-        });
-
-        submitButton.setOnAction(e -> bookResource());
-    }
-
-    private void bookResource() {
-        if (controller != null) {
-            controller.handleBookResource(
-                    selectedResourceId,
-                    studentIdField.getText().trim(),
-                    dateField.getText().trim(),
-                    startTimeField.getText().trim(),
-                    endTimeField.getText().trim()
-            );
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // Controller calls these to update the UI
-    // ---------------------------------------------------------------
-
     public void setStudentId(String studentId) {
         studentIdField.setText(studentId);
     }
 
-    /**
-     * Called by MainView when the student clicks a resource type card on the
-     * Home screen, so this screen opens with that type already locked in.
-     */
-    public void preselectResourceType(String type) {
-        resourceTypeField.setText(type);
-        if (controller != null) {
-            controller.handleResourceTypeChanged(type);
+    public void preselectResourceType(String resourceType) {
+        if (resourceTypeCombo.getItems().contains(resourceType)) {
+            resourceTypeCombo.setValue(resourceType);
+            if (controller != null) {
+                controller.handleResourceTypeChanged(resourceType);
+            }
+        } else {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Unavailable");
+            alert.setHeaderText("Resource Type Unavailable");
+            alert.setContentText("This resource type is currently unavailable. Please try another.");
+
+            ButtonType returnHomeButton = new ButtonType("Return to Home");
+            alert.getButtonTypes().setAll(returnHomeButton, ButtonType.CANCEL);
+
+            alert.showAndWait().ifPresent(response -> {
+                if (response == returnHomeButton) {
+                    navigateToHome();
+                }
+            });
         }
     }
 
+    private void navigateToHome() {
+        if (getScene() != null && getScene().getRoot() instanceof MainView) {
+            MainView mainView = (MainView) getScene().getRoot();
+            mainView.showHome();
+            return;
+        }
+
+        Node parent = this;
+        while (parent != null) {
+            if (parent instanceof MainView) {
+                ((MainView) parent).showHome();
+                return;
+            }
+            parent = parent.getParent();
+        }
+
+        if (getScene() != null) {
+            Node root = getScene().getRoot();
+            if (root instanceof MainView) {
+                ((MainView) root).showHome();
+                return;
+            }
+        }
+
+        System.err.println("Could not find MainView to navigate home.");
+    }
+
     public void updateResourceIdOptions(List<Resource> resources) {
-        resourceIdTable.setItems(FXCollections.observableArrayList(resources));
-        resourceIdField.clear();
-        selectedResourceId = null;
+        resourceIdCombo.getItems().clear();
+        resourceIdCombo.setDisable(resources.isEmpty());
+
+        if (resources.isEmpty()) {
+            resourceIdCombo.setPromptText("No resources available for this type");
+            return;
+        }
+
+        for (Resource r : resources) {
+            resourceIdCombo.getItems().add(r.getResourceId());
+        }
+        resourceIdCombo.setPromptText("Select a resource");
+        resourceIdCombo.setDisable(false);
     }
 
     public void showAvailableResources(List<Resource> resources) {
-        resourceIdTable.setItems(FXCollections.observableArrayList(resources));
-        resourceIdField.clear();
-        selectedResourceId = null;
-        openResourceIdPopup();
+        updateResourceIdOptions(resources);
+        if (!resources.isEmpty()) {
+            showSuccess("Found " + resources.size() + " available resource(s).");
+        }
     }
 
-    public void showBookingConfirmation(String referenceNumber) {
-        confirmationLabel.setText("Booking Successful!\n\nReference No: " + referenceNumber
-                + "\n\nAdded to your Upcoming Bookings.");
-        confirmationLabel.setTextFill(Color.web("#27AE60"));
-        confirmationButton.setText("OK");
-        showConfirmationCard();
-        setFormEnabled(true);
-        resetForm();
-    }
-
-    public void showDuplicateWarning() {
-        confirmationLabel.setText("Booking Failed.\nDuplicate booking found.");
-        confirmationLabel.setTextFill(Color.web("#E67E22"));
-        confirmationButton.setText("Try Again");
-        showConfirmationCard();
-        setFormEnabled(true);
+    public void showAvailabilityResult(String result) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Availability Check");
+        alert.setHeaderText("Resource Availability");
+        alert.setContentText(result);
+        alert.showAndWait();
     }
 
     public void setFormEnabled(boolean enabled) {
-        submitButton.setDisable(!enabled);
-        resourceIdField.setDisable(!enabled);
+        resourceTypeCombo.setDisable(!enabled);
+        resourceIdCombo.setDisable(!enabled || resourceIdCombo.getItems().isEmpty());
         dateField.setDisable(!enabled);
         startTimeField.setDisable(!enabled);
         endTimeField.setDisable(!enabled);
-        loadingIndicator.setVisible(!enabled);
+        submitButton.setDisable(!enabled);
+        checkAvailabilityButton.setDisable(!enabled);
     }
 
-    // ---------------------------------------------------------------
-    // Error messages
-    // ---------------------------------------------------------------
+    public void showBookingConfirmation(String reference) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Booking Confirmed");
+        alert.setHeaderText("Booking Successful!");
+        alert.setContentText("Reference No: " + reference + "\nYour booking has been confirmed.");
+        alert.showAndWait();
+        clearFields();
+    }
 
-    public void setResourceTypeError(String message) {
-        resourceTypeError.setText(message);
-        resourceTypeError.setVisible(true);
-        markFieldInvalid(resourceTypeField, true);
+    public void showDuplicateWarning() {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle("Duplicate Booking");
+        alert.setHeaderText("Booking Conflict");
+        alert.setContentText("This resource is already booked for the selected time slot. Please choose a different time or resource.");
+        alert.showAndWait();
+    }
+
+    // ================================================================
+    // EVENT HANDLERS
+    // ================================================================
+
+    private void handleCheckAvailability() {
+        if (controller == null) {
+            showError("Controller not connected.");
+            return;
+        }
+
+        String resourceId = resourceIdCombo.getValue();
+        String date = dateField.getText().trim();
+        String startTime = startTimeField.getText().trim();
+        String endTime = endTimeField.getText().trim();
+
+        if (resourceId == null || resourceId.isBlank()) {
+            showError("Please select a resource first.");
+            return;
+        }
+
+        if (date.isEmpty()) {
+            showError("Please enter a date.");
+            return;
+        }
+
+        if (startTime.isEmpty()) {
+            showError("Please enter a start time.");
+            return;
+        }
+
+        if (endTime.isEmpty()) {
+            showError("Please enter an end time.");
+            return;
+        }
+
+        controller.handleCheckAvailability(resourceId, date, startTime, endTime);
+    }
+
+    private void handleSubmitBooking() {
+        if (controller == null) {
+            showError("Controller not connected.");
+            return;
+        }
+
+        String resourceId = resourceIdCombo.getValue();
+        String studentId = studentIdField.getText().trim();
+        String date = dateField.getText().trim();
+        String startTime = startTimeField.getText().trim();
+        String endTime = endTimeField.getText().trim();
+
+        controller.handleBookResource(resourceId, studentId, date, startTime, endTime);
+    }
+
+    // ================================================================
+    // ERROR HANDLING
+    // ================================================================
+
+    public void clearAllErrors() {
+        hideError(resourceIdError);
+        hideError(dateError);
+        hideError(startTimeError);
+        hideError(endTimeError);
+        resourceIdCombo.setStyle("-fx-background-radius: 14; -fx-border-radius: 14;");
+        dateField.setStyle("-fx-background-radius: 14; -fx-border-radius: 14;");
+        startTimeField.setStyle("-fx-background-radius: 14; -fx-border-radius: 14;");
+        endTimeField.setStyle("-fx-background-radius: 14; -fx-border-radius: 14;");
     }
 
     public void setResourceIdError(String message) {
         resourceIdError.setText(message);
         resourceIdError.setVisible(true);
-        markFieldInvalid(resourceIdField, true);
+        resourceIdCombo.setStyle("-fx-border-color: #C0392B; -fx-border-radius: 14;");
     }
 
     public void setDateError(String message) {
         dateError.setText(message);
         dateError.setVisible(true);
-        markFieldInvalid(dateField, true);
+        dateField.setStyle("-fx-border-color: #C0392B; -fx-border-radius: 14;");
     }
 
     public void setStartTimeError(String message) {
         startTimeError.setText(message);
         startTimeError.setVisible(true);
-        markFieldInvalid(startTimeField, true);
+        startTimeField.setStyle("-fx-border-color: #C0392B; -fx-border-radius: 14;");
     }
 
     public void setEndTimeError(String message) {
         endTimeError.setText(message);
         endTimeError.setVisible(true);
-        markFieldInvalid(endTimeField, true);
+        endTimeField.setStyle("-fx-border-color: #C0392B; -fx-border-radius: 14;");
     }
 
-    public void clearAllErrors() {
-        resourceTypeError.setVisible(false);
-        resourceIdError.setVisible(false);
-        studentIdError.setVisible(false);
-        dateError.setVisible(false);
-        startTimeError.setVisible(false);
-        endTimeError.setVisible(false);
-
-        markFieldInvalid(resourceIdField, false);
-        markFieldInvalid(dateField, false);
-        markFieldInvalid(startTimeField, false);
-        markFieldInvalid(endTimeField, false);
+    private void hideError(Label label) {
+        label.setText("");
+        label.setVisible(false);
     }
 
-    public void resetForm() {
-        resourceIdTable.getItems().clear();
-        resourceIdField.clear();
-        selectedResourceId = null;
+    public void clearFields() {
+        resourceIdCombo.getItems().clear();
+        resourceIdCombo.setPromptText("Select a resource");
+        resourceIdCombo.setDisable(true);
         dateField.clear();
         startTimeField.clear();
         endTimeField.clear();
         clearAllErrors();
-    }
-
-    @Override
-    public void showError(String message) {
-        confirmationLabel.setText("Booking Failed.\n" + message);
-        confirmationLabel.setTextFill(Color.web("#C0392B"));
-        confirmationButton.setText("Try Again");
-        showConfirmationCard();
         setFormEnabled(true);
     }
 
     @Override
-    public void showSuccess(String message) {
-        confirmationLabel.setText(message);
-        confirmationLabel.setTextFill(Color.web("#27AE60"));
-        confirmationButton.setText("OK");
-        showConfirmationCard();
+    public void onShow() {
+        // Nothing needed when view is shown
     }
 
-    // ---------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------
-
-    private void markFieldInvalid(Control field, boolean invalid) {
-        field.setStyle(invalid
-                ? "-fx-border-color: #C0392B; -fx-border-width: 2; -fx-border-radius: 4;"
-                : "");
-    }
-
-    private void styleErrorLabel(Label label) {
-        label.setFont(Font.font("Arial", 11));
-        label.setTextFill(Color.web("#C0392B"));
-        label.setVisible(false);
-        label.setWrapText(true);
+    @Override
+    public void onHide() {
+        // Nothing needed when view is hidden
     }
 }

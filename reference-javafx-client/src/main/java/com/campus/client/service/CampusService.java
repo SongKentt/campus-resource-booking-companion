@@ -25,7 +25,10 @@ public class CampusService {
         this.dataStorage = dataStorage;
     }
 
-    //login
+    // ================================================================
+    // LOGIN
+    // ================================================================
+
     public boolean validateStudent(String studentId, String password){
         for(Student s : dataStorage.loadStudents()){
             if(s.getStudentId().equals(studentId) && s.getStudentPassword().equals(password)){
@@ -35,7 +38,10 @@ public class CampusService {
         return false;
     }
 
-    // check resource availability
+    // ================================================================
+    // CHECK RESOURCE AVAILABILITY
+    // ================================================================
+
     public String checkAvailability(String date, String building){
         Map<String, Object> argument = new HashMap<>();
         argument.put("date",date);
@@ -47,7 +53,38 @@ public class CampusService {
         return mcpClient.callTool("check_room_availability", argument);
     }
 
-    //book resource
+    // ================================================================
+    // GET FACILITIES FROM SERVER
+    // ================================================================
+
+    /**
+     * Fetches the facilities data from the MCP server via campus://facilities resource.
+     * This reads the server's facilities.txt file.
+     *
+     * @return The facilities data as a String
+     */
+    public String getFacilities() {
+        return mcpClient.readResource("campus://facilities");
+    }
+
+    // ================================================================
+    // GET ALL BOOKINGS (NEW - FOR AVAILABILITY CHECK)
+    // ================================================================
+
+    /**
+     * Gets all bookings from the data storage.
+     * Used for checking availability across all students.
+     *
+     * @return ArrayList of all bookings
+     */
+    public ArrayList<Booking> getAllBookings() {
+        return dataStorage.loadBookings();
+    }
+
+    // ================================================================
+    // BOOK RESOURCE
+    // ================================================================
+
     public Booking bookResource(String studentId, String resourceId, LocalDate date, LocalTime start, LocalTime end){
 
         Map<String, Object> argument = new HashMap<>();
@@ -63,7 +100,7 @@ public class CampusService {
             throw new IllegalStateException(result);
         }
 
-        // ===== FIX: Extract just the booking reference from the result =====
+        // Extract just the booking reference from the result
         String bookingRef = extractBookingRef(result);
         System.out.println("Extracted booking reference: " + bookingRef);
         System.out.println("Full response: " + result);
@@ -91,7 +128,10 @@ public class CampusService {
         return "BK-" + System.currentTimeMillis();
     }
 
-    //view booking
+    // ================================================================
+    // VIEW BOOKINGS
+    // ================================================================
+
     public ArrayList<Booking> getUserBookings(String studentId){
         ArrayList<Booking> result = new ArrayList<>();
         for(Booking b : dataStorage.loadBookings()){
@@ -102,7 +142,10 @@ public class CampusService {
         return result;
     }
 
-    //cancel booking
+    // ================================================================
+    // CANCEL BOOKING
+    // ================================================================
+
     public void cancelBooking(String bookingRef){
         dataStorage.updateBookingStatus(bookingRef,1);
     }

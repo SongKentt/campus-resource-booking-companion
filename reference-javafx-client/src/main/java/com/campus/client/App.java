@@ -15,7 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * JavaFX host for the reference client. Resolves configuration, connects to the Campus MCP server
+ * JavaFX host for the Campus Resource Booking Companion.
+ * Resolves configuration, connects to the Campus MCP server
  * over HTTP/SSE on a background thread, builds the RAG stack, and hands everything to {@link MainView}.
  *
  * <p>Configuration (all overridable):
@@ -30,17 +31,18 @@ public final class App extends Application {
     private static final Logger log = LoggerFactory.getLogger(App.class);
     private static final String DEFAULT_URL = "http://localhost:8080";
 
-    //private static final String DEFAULT_MODEL = "claude-sonnet-4-6";
     private static final String DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
-
     private static final String DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
     private static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
     /** Default is anthropic. Change this to suit your need - anthropic, gemini, openai, google
-        Remember to set the <PROVIDER>_API_Key value in your environment variable.
-        Warning: DO NOT store API_Keys in your source code!
-    **/
-    private static final String DEFAULT_PROVIDER = "gemini"; //anthropic  //openai
+     Remember to set the <PROVIDER>_API_KEY value in your environment variable.
+     Warning: DO NOT store API_Keys in your source code!
+     **/
+    private static final String DEFAULT_PROVIDER = "gemini";
+
+    // ===== ADD THIS: Static instance for getMainView() =====
+    private static App instance;
 
     private CampusMcpClient mcp;
     private MainView view;
@@ -51,9 +53,13 @@ public final class App extends Application {
 
     @Override
     public void start(Stage stage) {
+        // ===== ADD THIS: Store instance reference =====
+        instance = this;
+
         view = new MainView();
-        stage.setTitle("Campus MCP Reference Client");
-        stage.setScene(new Scene(view.getRoot(), 900, 720));
+        stage.setTitle("Campus Resource Booking Companion");
+        // ===== FIX: MainView extends BorderPane, use it directly =====
+        stage.setScene(new Scene(view, 1100, 750));
         stage.show();
 
         Thread t = new Thread(this::bootstrap, "mcp-bootstrap");
@@ -66,19 +72,15 @@ public final class App extends Application {
             String url = firstNonBlank(System.getProperty("mcp.server.url"),
                     System.getenv("MCP_SERVER_URL"), DEFAULT_URL);
             Platform.runLater(() -> {
-                //put the UI code in Platform.runLater()
-                 view.setStatus("Connecting to MCP server at " + url + " …");
-                 System.out.println("Connecting to MCP server at " + url );
+                // ===== FIX: Use setStatusMessage() instead of setStatus() =====
+                view.setStatusMessage("Connecting to MCP server at " + url + " …");
+                System.out.println("Connecting to MCP server at " + url);
             });
 
             mcp = new CampusMcpClient(url);
             var init = mcp.connect();
 
-            // The LLM is optional: discovery and direct tool calls work without an API key.
-            // RagService_old rag = null;
-            // String llmNote;
-
-            //Added multiple LLM models
+            // Added multiple LLM models
             LlmClient llm = buildLlmClient();
             RagService rag = (llm == null) ? null : new RagService(mcp, llm);
             String llmNote = (llm == null)
@@ -87,29 +89,19 @@ public final class App extends Application {
 
             final RagService ragFinal = rag;
 
-            /* String apiKey = firstNonBlank(System.getProperty("anthropic.apiKey"),
-                    System.getenv("ANTHROPIC_API_KEY"), null);
-
-            if (apiKey != null) {
-                String model = firstNonBlank(System.getProperty("anthropic.model"), DEFAULT_MODEL);
-                rag = new RagService_old(mcp, new AnthropicClient(apiKey, model, 1024));
-                llmNote = "LLM: " + model;
-            } else {
-                llmNote = "LLM: disabled (set ANTHROPIC_API_KEY to enable the RAG tab)";
-            }
-            final RagService_old ragFinal = rag;
-            */
-
             Platform.runLater(() -> {
-                //put the UI code in Platform.runLater()
                 view.bind(mcp, ragFinal);
-                view.setStatus("Connected to '" + init.serverInfo().name() + "'.  " + llmNote);
+                // ===== FIX: Use setStatusMessage() instead of setStatus() =====
+                view.setStatusMessage("Connected to '" + init.serverInfo().name() + "'.  " + llmNote);
                 view.refreshDiscovery();
             });
         } catch (Exception e) {
             log.error("Bootstrap failed", e);
-            Platform.runLater(() -> view.setStatus("Connection failed: " + e.getMessage()
-                    + "  (Is the server running?)"));
+            Platform.runLater(() -> {
+                // ===== FIX: Use setStatusMessage() instead of setStatus() =====
+                view.setStatusMessage("Connection failed: " + e.getMessage()
+                        + "  (Is the server running?)");
+            });
         }
     }
 
@@ -119,7 +111,15 @@ public final class App extends Application {
      */
     private LlmClient buildLlmClient() {
         String provider = firstNonBlank(System.getProperty("llm.provider"),
-                System.getenv("LLM_PROVIDER"), DEFAULT_PROVIDER).toLowerCase();
+                System.getenv("LLM_PROVIDER"), DEFAULT_PROVIDER);
+
+        // ===== FIX: Handle null provider safely =====
+        if (provider == null) {
+            log.warn("No LLM provider specified; RAG tab disabled.");
+            return null;
+        }
+
+        provider = provider.toLowerCase();
         int maxTokens = 1024;
 
         switch (provider) {
@@ -150,6 +150,7 @@ public final class App extends Application {
             }
         }
     }
+
     private static String firstNonBlank(String... values) {
         for (String v : values) {
             if (v != null && !v.isBlank()) {
