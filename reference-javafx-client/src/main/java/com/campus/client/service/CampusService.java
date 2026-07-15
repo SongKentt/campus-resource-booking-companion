@@ -20,6 +20,11 @@ public class CampusService {
     // Pattern to extract booking reference like BK-1010
     private static final Pattern BOOKING_REF_PATTERN = Pattern.compile("(BK-\\d{4})");
 
+    // ===== STATUS CONSTANTS (BEFORE CHANGE) =====
+    // 0 = Active, 1 = Cancelled
+    private static final int STATUS_ACTIVE = 0;
+    private static final int STATUS_CANCELLED = 1;
+
     public CampusService(CampusMcpClient mcpClient, DataStorage dataStorage){
         this.mcpClient = mcpClient;
         this.dataStorage = dataStorage;
@@ -57,26 +62,14 @@ public class CampusService {
     // GET FACILITIES FROM SERVER
     // ================================================================
 
-    /**
-     * Fetches the facilities data from the MCP server via campus://facilities resource.
-     * This reads the server's facilities.txt file.
-     *
-     * @return The facilities data as a String
-     */
     public String getFacilities() {
         return mcpClient.readResource("campus://facilities");
     }
 
     // ================================================================
-    // GET ALL BOOKINGS (NEW - FOR AVAILABILITY CHECK)
+    // GET ALL BOOKINGS
     // ================================================================
 
-    /**
-     * Gets all bookings from the data storage.
-     * Used for checking availability across all students.
-     *
-     * @return ArrayList of all bookings
-     */
     public ArrayList<Booking> getAllBookings() {
         return dataStorage.loadBookings();
     }
@@ -94,36 +87,28 @@ public class CampusService {
         argument.put("endTime", end.toString());
         argument.put("studentId", studentId);
 
-        String result = mcpClient.callTool("book_resource" , argument);
+        String result = mcpClient.callTool("book_resource", argument);
 
         if(result.startsWith("ERROR:")){
             throw new IllegalStateException(result);
         }
 
-        // Extract just the booking reference from the result
         String bookingRef = extractBookingRef(result);
         System.out.println("Extracted booking reference: " + bookingRef);
         System.out.println("Full response: " + result);
 
-        // Use the extracted reference, not the full message
-        Booking booking = new Booking(bookingRef, resourceId, date, start, end, studentId, 0);
+        // ===== PREVIOUS: status = 0 means ACTIVE =====
+        Booking booking = new Booking(bookingRef, resourceId, date, start, end, studentId, STATUS_ACTIVE);
 
         dataStorage.saveBooking(booking);
         return booking;
     }
 
-    /**
-     * Extracts the booking reference (e.g., BK-1010) from the server response.
-     *
-     * @param response The full response from the server
-     * @return The extracted booking reference, or a fallback if not found
-     */
     private String extractBookingRef(String response) {
         Matcher matcher = BOOKING_REF_PATTERN.matcher(response);
         if (matcher.find()) {
             return matcher.group(1);
         }
-        // Fallback: return a generic reference if pattern doesn't match
         System.err.println("Could not extract booking reference from: " + response);
         return "BK-" + System.currentTimeMillis();
     }
@@ -147,6 +132,7 @@ public class CampusService {
     // ================================================================
 
     public void cancelBooking(String bookingRef){
-        dataStorage.updateBookingStatus(bookingRef,1);
+        // ===== PREVIOUS: 1 = CANCELLED =====
+        dataStorage.updateBookingStatus(bookingRef, STATUS_CANCELLED);
     }
 }

@@ -21,7 +21,11 @@ public class BookingController {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+
+    // ===== STATUS CONSTANTS (BEFORE CHANGE) =====
+    // 0 = Active, 1 = Cancelled
     private static final int STATUS_ACTIVE = 0;
+    private static final int STATUS_CANCELLED = 1;
 
     private final BookingView view;
     private final CampusService campusService;
@@ -47,7 +51,6 @@ public class BookingController {
     );
 
     // ===== RESOURCES THAT ACTUALLY WORK ON THE SERVER =====
-    // Only these can be booked - the server rejects dot-format IDs
     private static final List<String> WORKING_RESOURCES = List.of(
             "KA-P1", "KA-P2", "SP-B1"
     );
@@ -57,7 +60,7 @@ public class BookingController {
         this.campusService = campusService;
         view.setController(this);
 
-        // ===== FIX 2: Load facilities in background to prevent UI freeze =====
+        // Load facilities in background
         worker.submit(() -> {
             loadFacilitiesFromServer();
         });
@@ -73,7 +76,6 @@ public class BookingController {
             if (facilitiesData == null || facilitiesData.isEmpty()) {
                 System.err.println("Failed to load facilities from server. Using hardcoded resources.");
                 loadHardcodedResources();
-                // Update view on UI thread
                 javafx.application.Platform.runLater(() -> {
                     view.updateResourceTypeOptions(availableResourceTypes);
                 });
@@ -91,7 +93,6 @@ public class BookingController {
                 loadHardcodedResources();
             }
 
-            // Update view on UI thread
             javafx.application.Platform.runLater(() -> {
                 view.updateResourceTypeOptions(availableResourceTypes);
             });
@@ -109,10 +110,6 @@ public class BookingController {
         }
     }
 
-    /**
-     * Parses the facilities.txt format.
-     * Shows ALL resources in the dropdown, but only allows booking for working ones.
-     */
     private void parseFacilities(String data) {
         allResources.clear();
         availableResourceTypes.clear();
@@ -150,8 +147,6 @@ public class BookingController {
                     } catch (NumberFormatException e) { /* ignore */ }
                     String building = parts[3].trim();
 
-                    // ===== ADD ALL RESOURCES (BOTH DOT AND DASH) =====
-                    // This ensures ALL 4 types show in the dropdown
                     if (id.matches("[A-Z0-9.\\-]+")) {
                         String typeName = getTypeName(type);
                         Resource resource = new Resource(id, typeName + " " + id, building, capacity);
@@ -219,10 +214,6 @@ public class BookingController {
         return "Other";
     }
 
-    /**
-     * Checks if a resource can actually be booked (server accepts it).
-     * Only dash-format resources work: KA-P1, KA-P2, SP-B1
-     */
     private boolean isBookableResource(String resourceId) {
         return WORKING_RESOURCES.contains(resourceId);
     }
@@ -249,7 +240,6 @@ public class BookingController {
             return;
         }
 
-        // ===== Check if the resource is bookable =====
         if (!isBookableResource(resourceId)) {
             view.showError("The resource is unavailable. Please try again.");
             return;
@@ -356,12 +346,13 @@ public class BookingController {
         return null;
     }
 
+    // ===== PREVIOUS: Checks only ACTIVE bookings (status = 0) =====
     private boolean isTimeSlotAvailable(String resourceId, LocalDate date, LocalTime start, LocalTime end) {
         List<Booking> allBookings = campusService.getAllBookings();
         for (Booking b : allBookings) {
             if (b.getResourceId().equals(resourceId)
                     && b.getDate().equals(date)
-                    && b.getStatus() == STATUS_ACTIVE) {
+                    && b.getStatus() == STATUS_ACTIVE) {  // 0 = Active
                 boolean overlaps = start.isBefore(b.getEndTime()) && end.isAfter(b.getStartTime());
                 if (overlaps) {
                     return false;
@@ -386,7 +377,6 @@ public class BookingController {
             valid = false;
         }
 
-        // ===== FIX 3: Check if resource exists =====
         if (valid && resourceId != null) {
             boolean exists = allResources.stream().anyMatch(r -> r.getResourceId().equals(resourceId));
             if (!exists) {
@@ -395,7 +385,6 @@ public class BookingController {
             }
         }
 
-        // ===== CHECK IF RESOURCE IS BOOKABLE =====
         if (valid && resourceId != null && !isBookableResource(resourceId)) {
             view.showError("The resource is unavailable. Please try again.");
             return;
@@ -454,7 +443,6 @@ public class BookingController {
         Task<Booking> task = new Task<>() {
             @Override
             protected Booking call() throws Exception {
-                // ===== FIX 1: Use getAllBookings() for duplicate check =====
                 if (isDuplicateBooking(studentId, resourceId, finalDate, finalStart, finalEnd)) {
                     throw new DuplicateBookingException();
                 }
@@ -479,14 +467,13 @@ public class BookingController {
         worker.submit(task);
     }
 
-    // ===== FIX 1: Updated to use getAllBookings() =====
+    // ===== PREVIOUS: Checks only ACTIVE bookings (status = 0) =====
     private boolean isDuplicateBooking(String studentId, String resourceId,
                                        LocalDate date, LocalTime start, LocalTime end) {
-        // Check ALL bookings, not just the student's
         for (Booking existing : campusService.getAllBookings()) {
             if (existing.getResourceId().equals(resourceId)
                     && existing.getDate().equals(date)
-                    && existing.getStatus() == STATUS_ACTIVE) {
+                    && existing.getStatus() == STATUS_ACTIVE) {  // 0 = Active
                 boolean overlaps = start.isBefore(existing.getEndTime()) && end.isAfter(existing.getStartTime());
                 if (overlaps) {
                     return true;

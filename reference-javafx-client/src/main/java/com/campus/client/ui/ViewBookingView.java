@@ -18,9 +18,6 @@ import java.util.List;
 /**
  * The Booking History screen - shows the student's upcoming and past bookings,
  * and lets them cancel an upcoming one (FR4, FR5).
- *
- * NAVBAR: This screen does NOT have its own navbar.
- * It relies on MainView's shared navbar for navigation.
  */
 public class ViewBookingView extends BaseView {
 
@@ -80,7 +77,6 @@ public class ViewBookingView extends BaseView {
         mainContent.setAlignment(Pos.TOP_CENTER);
         VBox.setVgrow(mainContent, Priority.ALWAYS);
 
-        // ✅ REMOVED: buildNavBar() - uses MainView's shared navbar
         getChildren().addAll(buildHeroBanner("Booking History"), mainContent);
     }
 
@@ -142,7 +138,9 @@ public class ViewBookingView extends BaseView {
                         + "-fx-max-width: 28; -fx-max-height: 28;");
                 cancelBtn.setOnAction(e -> {
                     Booking booking = getTableView().getItems().get(getIndex());
-                    cancelBooking(booking);
+                    if (booking != null) {
+                        cancelBooking(booking);
+                    }
                 });
             }
 
@@ -197,10 +195,11 @@ public class ViewBookingView extends BaseView {
 
     private void viewBookings() {
         if (controller != null) {
-            controller.handleViewBookings();
+            controller.loadBookings();
         }
     }
 
+    // ===== FIX: Pass booking reference (String) to controller =====
     private void cancelBooking(Booking booking) {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Cancel Booking");
@@ -213,7 +212,8 @@ public class ViewBookingView extends BaseView {
 
         confirm.showAndWait().ifPresent(result -> {
             if (result == yesBtn && controller != null) {
-                controller.handleCancelBooking(booking);
+                // ===== FIX: Pass the booking reference (String) =====
+                controller.handleCancelBooking(booking.getBookingRef());
             }
         });
     }
@@ -235,7 +235,7 @@ public class ViewBookingView extends BaseView {
 
     @Override
     public void showError(String message) {
-        statusLabel.setText("❌ " + message);
+        statusLabel.setText("Error: " + message);
         statusLabel.setStyle("-fx-background-color: #FDECEA; -fx-text-fill: #C0392B; "
                 + "-fx-padding: 8 12 8 12; -fx-background-radius: 6; "
                 + "-fx-border-color: #E74C3C; -fx-border-width: 1; -fx-border-radius: 6;");
@@ -244,7 +244,7 @@ public class ViewBookingView extends BaseView {
 
     @Override
     public void showSuccess(String message) {
-        statusLabel.setText("✅ " + message);
+        statusLabel.setText("Success: " + message);
         statusLabel.setStyle("-fx-background-color: #E8F8E8; -fx-text-fill: #27AE60; "
                 + "-fx-padding: 8 12 8 12; -fx-background-radius: 6; "
                 + "-fx-border-color: #2ECC71; -fx-border-width: 1; -fx-border-radius: 6;");
