@@ -55,7 +55,7 @@ public class ViewBookingController {
             }
         }
 
-        view.displayBookings(pastBookings, upcomingBookings);
+        view.displayBookings(upcomingBookings, pastBookings);
     }
 
     /**
@@ -121,23 +121,5 @@ public class ViewBookingController {
         loadBookings();
     }
 
-    public List<Booking> getPastBookings() {
-        List<Booking> past = new ArrayList<>();
-        for (Booking b : campusService.getUserBookings(currentStudentId)) {
-            if (isPastBooking(b)) {
-                past.add(b);
-            }
-        }
-        return past;
-    }
 
-    public List<Booking> getUpcomingBookings() {
-        List<Booking> upcoming = new ArrayList<>();
-        for (Booking b : campusService.getUserBookings(currentStudentId)) {
-            if (!isPastBooking(b)) {
-                upcoming.add(b);
-            }
-        }
-        return upcoming;
-    }
 }

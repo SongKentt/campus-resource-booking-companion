@@ -228,10 +228,7 @@ public class ViewBookingView extends BaseView {
         statusLabel.setVisible(false);
     }
 
-    public void onBookingCancelled(Booking booking) {
-        upcomingData.remove(booking);
-        showSuccess("Booking is cancelled!");
-    }
+
 
     @Override
     public void showError(String message) {
