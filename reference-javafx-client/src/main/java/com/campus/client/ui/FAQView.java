@@ -1,7 +1,6 @@
 package com.campus.client.ui;
 
 import com.campus.client.controller.FAQController;
-import com.campus.client.rag.RagResponse;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -17,6 +16,8 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+
+import java.util.List;
 
 /**
  * JavaFX view for the RAG Policy Assistant screen.
@@ -199,12 +200,8 @@ public class FAQView extends BaseView {
     }
 
 
-    /**
-     *  Displays the generated answer and retrieved sources.
-     *
-     * @param response completed RAG response
-     */
-    public void displayResponse(RagResponse response) {
+
+    public void displayResponse(String answer, String context, List<String> sources) {
         chatBox.getChildren().removeIf(node ->
                 node instanceof Label lbl && "loading-label".equals(lbl.getId()));
 
@@ -213,7 +210,7 @@ public class FAQView extends BaseView {
         assistantLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
         assistantLabel.setTextFill(Color.web("#1F3864"));
 
-        Label answerBubble = new Label(response.getAnswer());
+        Label answerBubble = new Label(answer);
         answerBubble.setWrapText(true);
         answerBubble.setMaxWidth(450);
         answerBubble.setFont(Font.font("Arial", 13));
@@ -232,8 +229,8 @@ public class FAQView extends BaseView {
             sourcesPanel.getChildren().remove(1, sourcesPanel.getChildren().size());
         }
 
-        if (response.getSources() != null && !response.getSources().isEmpty()) {
-            for (String source : response.getSources()) {
+        if (sources != null && !sources.isEmpty()) {
+            for (String source : sources) {
                 Label sourceLabel = new Label("📄 " + source);
                 sourceLabel.setWrapText(true);
                 sourceLabel.setFont(Font.font("Arial", 12));
@@ -243,8 +240,8 @@ public class FAQView extends BaseView {
         }
 
         // Display full retrieved context text in sources panel
-        if (response.getContextUsed() != null && !response.getContextUsed().isBlank()) {
-            TextArea contextArea = new TextArea(response.getContextUsed());
+        if (context != null && !context.isBlank()) {
+            TextArea contextArea = new TextArea(context);
             contextArea.setEditable(false);
             contextArea.setWrapText(true);
             contextArea.setPrefRowCount(10);

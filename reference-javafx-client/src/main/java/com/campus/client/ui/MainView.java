@@ -711,8 +711,18 @@ public class MainView extends BorderPane {
         if (rag != null && faqView != null) {
             faqController = new FAQController(rag, faqView);
             faqView.setController(faqController);
-            System.out.println("FAQController created with RAG in bind()");
-        } else if (rag == null) {
+            System.out.println("FAQController connected to existing FAQView");
+        }
+
+        else if(rag !=null){
+            faqView = new FAQView();
+            faqController = new FAQController(rag,faqView);
+            faqView.setController(faqController);
+            System.out.println("FAQController created and connected to new FAQView");
+        }
+
+
+        else{
             System.out.println("RAG service not available (API key missing?)");
         }
     }

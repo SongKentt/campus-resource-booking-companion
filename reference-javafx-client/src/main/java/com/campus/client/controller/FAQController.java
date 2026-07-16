@@ -1,10 +1,11 @@
 package com.campus.client.controller;
 
-import com.campus.client.rag.RagResponse;
 import com.campus.client.rag.RagService;
 import com.campus.client.ui.FAQView;
 import javafx.application.Platform;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -66,11 +67,15 @@ public class FAQController {
         // Run MCP retrieval and LLM generation on a background thread.
         worker.submit(() -> {
             try {
-                RagResponse response = ragService.answerQuestion(question);
+                RagService.RagResult result = ragService.ask(question,"general");
+
+                String answer = result.answer();
+                String context = result.retrievedContext();
+                List<String> sources = extractSources(context);
 
                 // Success: update UI with context and answer
                 Platform.runLater(() -> {
-                    view.displayResponse(response);
+                    view.displayResponse(answer, context, sources);
                     view.setInputEnabled(true);
                 });
 
@@ -82,6 +87,26 @@ public class FAQController {
                 });
             }
         });
+    }
+
+    // this is previously done in ragresponse
+    private List<String> extractSources(String context){
+        List<String> sources = new ArrayList<>();
+        if(context == null || context.isEmpty()){
+            return sources;
+        }
+
+        String[] lines = context.split("\n");
+        for (String line : lines) {
+            line = line.trim();
+            if (line.startsWith("[") && line.contains("]")) {
+                String source = line.substring(1, line.indexOf("]")).trim();
+                if (!source.isEmpty() && !sources.contains(source)) {
+                    sources.add(source);
+                }
+            }
+        }
+        return sources;
     }
 
     /**

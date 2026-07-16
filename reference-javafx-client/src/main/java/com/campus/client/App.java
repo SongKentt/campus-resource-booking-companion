@@ -1,9 +1,7 @@
 package com.campus.client;
 
 import com.campus.client.llm.AnthropicClient;
-import com.campus.client.llm.GeminiClient;
 import com.campus.client.llm.LlmClient;
-import com.campus.client.llm.OpenAiClient;
 import com.campus.client.mcp.CampusMcpClient;
 import com.campus.client.rag.RagService;
 import com.campus.client.ui.MainView;
@@ -32,14 +30,12 @@ public final class App extends Application {
     private static final String DEFAULT_URL = "http://localhost:8080";
 
     private static final String DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
-    private static final String DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
-    private static final String DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
     /** Default is anthropic. Change this to suit your need - anthropic, gemini, openai, google
      Remember to set the <PROVIDER>_API_KEY value in your environment variable.
      Warning: DO NOT store API_Keys in your source code!
      **/
-    private static final String DEFAULT_PROVIDER = "gemini";
+    private static final String DEFAULT_PROVIDER = "anthropic";
 
     // ===== ADD THIS: Static instance for getMainView() =====
     private static App instance;
@@ -130,20 +126,7 @@ public final class App extends Application {
                 String model = firstNonBlank(System.getProperty("anthropic.model"), DEFAULT_ANTHROPIC_MODEL);
                 return new AnthropicClient(key, model, maxTokens);
             }
-            case "openai" -> {
-                String key = firstNonBlank(System.getProperty("openai.apiKey"),
-                        System.getenv("OPENAI_API_KEY"), null);
-                if (key == null) return null;
-                String model = firstNonBlank(System.getProperty("openai.model"), DEFAULT_OPENAI_MODEL);
-                return new OpenAiClient(key, model, maxTokens);
-            }
-            case "gemini", "google" -> {
-                String key = firstNonBlank(System.getProperty("gemini.apiKey"),
-                        System.getenv("GEMINI_API_KEY"), System.getenv("GOOGLE_API_KEY"), null);
-                if (key == null) return null;
-                String model = firstNonBlank(System.getProperty("gemini.model"), DEFAULT_GEMINI_MODEL);
-                return new GeminiClient(key, model, maxTokens);
-            }
+
             default -> {
                 log.warn("Unknown LLM_PROVIDER '{}'; RAG tab disabled.", provider);
                 return null;
