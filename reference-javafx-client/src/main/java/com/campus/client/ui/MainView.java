@@ -143,8 +143,8 @@ public class MainView extends BorderPane {
     private void initDataStorage() {
         try {
             dataStorage = new DataStorage(
-                    "references-javafx-client/data/userData.txt",
-                    "references-javafx-client/data/bookingRecord.txt"
+                    "reference-javafx-client/data/userData.txt",
+                    "reference-javafx-client/data/bookingRecord.txt"
             );
 
             List<Student> students = dataStorage.loadStudents();
