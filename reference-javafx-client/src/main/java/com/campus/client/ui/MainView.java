@@ -2,9 +2,11 @@ package com.campus.client.ui;
 
 import com.campus.client.controller.BookingController;
 import com.campus.client.controller.FAQController;
+import com.campus.client.controller.LoginController;
 import com.campus.client.controller.ViewBookingController;
 import com.campus.client.mcp.CampusMcpClient;
 import com.campus.client.model.DataStorage;
+import com.campus.client.model.Resource;
 import com.campus.client.model.Student;
 import com.campus.client.rag.RagService;
 import com.campus.client.service.CampusService;
@@ -25,27 +27,17 @@ import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
+import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-/**
- * Main navigation container for the Campus Resource Booking Companion.
- * Home screen shows a welcome message and 4 informational resource cards
- * with operating hours. Cards are for display only - users navigate via navbar.
- *
- * MCP status is independent of user login - it shows the actual connection
- * state to the MCP server, not the user's session state.
- */
 public class MainView extends BorderPane {
 
-    // ================================================================
-    // NAVBAR COMPONENTS
-    // ================================================================
-
+    //UI component for the navigation bar
     private HBox navbar;
     private Circle mcpStatusIndicator;
     private Label mcpStatusLabel;
@@ -65,20 +57,13 @@ public class MainView extends BorderPane {
     private VBox homeContent;
     private String currentStudentId = "";
 
-    // ResourceBooking View
     private BookingView bookingView;
     private BookingController bookingController;
-    // BookingHistory View
     private ViewBookingView viewBookingView;
     private ViewBookingController viewBookingController;
 
-    // Shared service
     private CampusService campusService;
-
-    // PolicyAssistant View
     private FAQView faqView;
-
-    // Placeholders
     private VBox availabilityPlaceholder;
 
     // ================================================================
@@ -93,11 +78,7 @@ public class MainView extends BorderPane {
     // BACKGROUND THREAD
     // ================================================================
 
-    private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "ui-worker");
-        t.setDaemon(true);
-        return t;
-    });
+    private Thread workerThread;
 
     // ================================================================
     // STATUS LABEL
@@ -110,7 +91,7 @@ public class MainView extends BorderPane {
     // ================================================================
 
     private DataStorage dataStorage;
-    private final Map<String, String> userCredentials = new HashMap<>();
+    private LoginController loginController;
 
     // ================================================================
     // CONSTRUCTOR
@@ -122,12 +103,10 @@ public class MainView extends BorderPane {
         buildNavbar();
         buildLoginView();
         buildHomeContent();
-        buildBookingViews();
-        buildFAQView();
+        buildBookingViews();          // ← Only creates views, NO CampusService
+        buildFAQView();               // ← Only creates faqView, NO controller yet
         buildPlaceholders();
         buildStatusLabel();
-
-        setupLoginAction();
 
         setTop(navbar);
         showLogin();
@@ -136,92 +115,56 @@ public class MainView extends BorderPane {
         System.out.println("DEBUG: RAG is " + (rag == null ? "NULL" : "NOT NULL"));
     }
 
+    private static File findDataDir() {
+        try {
+            File classesDir = new File(MainView.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            // classesDir is .../reference-javafx-client/target/classes
+            // go up twice: out of classes, out of target, landing on reference-javafx-client
+            File moduleRoot = classesDir.getParentFile().getParentFile();
+            return new File(moduleRoot, "data");
+        } catch (Exception e) {
+            System.err.println("Could not resolve data folder from classpath: " + e.getMessage());
+            return new File("data"); // last resort fallback
+        }
+    }
     // ================================================================
     // INIT DATA STORAGE
     // ================================================================
 
     private void initDataStorage() {
+        File dataDir = findDataDir();
+        File userDataFile = new File(dataDir, "userData.txt");
+        File bookingFile = new File(dataDir, "bookingRecord.txt");
+
         try {
-            dataStorage = new DataStorage(
-                    "reference-javafx-client/data/userData.txt",
-                    "reference-javafx-client/data/bookingRecord.txt"
-            );
-
+            dataStorage = new DataStorage(userDataFile.getPath(), bookingFile.getPath());
             List<Student> students = dataStorage.loadStudents();
-
-            for (Student student : students) {
-                userCredentials.put(student.getStudentId(), student.getStudentPassword());
-                System.out.println("Loaded user: " + student.getStudentId() + " -> " + student.getStudentName());
-            }
-
-            System.out.println("Total users loaded from file: " + userCredentials.size());
-
-            if (userCredentials.isEmpty()) {
-                System.err.println("No users found in userData.txt. Using hardcoded users.");
-                initHardcodedTestUsers();
-            }
-
+            System.out.println("Loaded " + students.size() + " users from: " + userDataFile.getPath());
         } catch (Exception e) {
             System.err.println("Failed to load user data from file: " + e.getMessage());
-            System.err.println("Falling back to hardcoded test users...");
-            initHardcodedTestUsers();
+            dataStorage = new DataStorage(userDataFile.getPath(), bookingFile.getPath());
         }
     }
 
-    private void initHardcodedTestUsers() {
-        userCredentials.put("0375421", "password123");
-        userCredentials.put("0377465", "password123");
-        userCredentials.put("0387332", "password123");
-        userCredentials.put("0376612", "password123");
-        userCredentials.put("0387409", "password123");
-        userCredentials.put("1234567", "test123");
-        System.out.println("Loaded " + userCredentials.size() + " hardcoded test users");
+    // ================================================================
+    // LOGIN CALLBACK
+    // ================================================================
+
+    private Consumer<String> createLoginCallback() {
+        return studentId -> {
+            currentStudentId = studentId;
+            System.out.println("Login successful for: " + studentId);
+            if (viewBookingController != null) {
+                viewBookingController.setStudentId(studentId);
+            }
+            showHome();
+            showAllNavButtons();
+            setStatusMessage("Logged in as: " + studentId);
+        };
     }
 
     // ================================================================
-    // SETUP LOGIN ACTION
-    // ================================================================
-
-    private void setupLoginAction() {
-        loginView.setLoginAction(() -> {
-            loginView.clearFieldErrors();
-
-            String id = loginView.getStudentId();
-            String password = loginView.getPassword();
-
-            if (id.isEmpty()) {
-                loginView.showStudentIdError("Please enter a Student ID");
-                return;
-            }
-            if (password.isEmpty()) {
-                loginView.showPasswordError("Please enter a password");
-                return;
-            }
-
-            if (isValidUser(id, password)) {
-                currentStudentId = id;
-                System.out.println("Login successful for: " + id);
-                if (viewBookingController != null) {
-                    viewBookingController.setStudentId(id);
-                }
-                showHome();
-                showAllNavButtons();
-                setStatusMessage("Logged in as: " + id);
-                loginView.clearFields();
-            } else {
-                loginView.showPasswordError("Invalid Student ID or password.");
-                System.out.println("Login failed for: " + id);
-            }
-        });
-    }
-
-    private boolean isValidUser(String id, String password) {
-        String expectedPassword = userCredentials.get(id);
-        return expectedPassword != null && expectedPassword.equals(password);
-    }
-
-    // ================================================================
-    // SHARED NAVBAR BUILDER
+    // NAVBAR BUILDER
     // ================================================================
 
     private void buildNavbar() {
@@ -231,14 +174,12 @@ public class MainView extends BorderPane {
         navbar.setAlignment(Pos.CENTER_LEFT);
         navbar.setId("navbar");
 
-        // Navigation Buttons
         homeBtn = createHomeLogoutButton("Home");
         bookingBtn = createNavButton("Resource\nBooking");
         historyBtn = createNavButton("Booking\nHistory");
         policyBtn = createNavButton("Policy\nAssistant");
         logoutBtn = createHomeLogoutButton("Logout");
 
-        // MCP Status indicator
         mcpStatusIndicator = new Circle(8);
         mcpStatusIndicator.setFill(Color.RED);
         mcpStatusIndicator.setId("mcpStatus");
@@ -248,26 +189,21 @@ public class MainView extends BorderPane {
         mcpStatusLabel.setId("mcpStatusLabel");
         mcpStatusLabel.setPadding(new Insets(0, 10, 0, 5));
 
-        // User Info
         userInfoLabel = new Label();
         userInfoLabel.setStyle("-fx-text-fill: #95A5A6; -fx-font-size: 11px;");
         userInfoLabel.setId("userInfo");
 
-        // Hide buttons until login
         hideAllNavButtons();
 
-        // Event Handlers
         homeBtn.setOnAction(e -> showHome());
         bookingBtn.setOnAction(e -> showBooking());
         historyBtn.setOnAction(e -> showHistory());
         policyBtn.setOnAction(e -> showPolicy());
         logoutBtn.setOnAction(e -> handleLogout());
 
-        // Spacer
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        // Add all to navbar
         navbar.getChildren().addAll(
                 homeBtn,
                 mcpStatusIndicator,
@@ -286,20 +222,20 @@ public class MainView extends BorderPane {
         btn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
 
         String base =
-                "-fx-background-color: #D9D9D9; " +
-                        "-fx-text-fill: #2C2C2C; " +
+                "-fx-background-color: white; " +
+                        "-fx-text-fill: #2980B9; " +
                         "-fx-font-size: 11px; " +
-                        "-fx-font-weight: normal; " +
+                        "-fx-font-weight: bold; " +
                         "-fx-padding: 3 18; " +
                         "-fx-background-radius: 4; " +
                         "-fx-cursor: hand; " +
                         "-fx-border-color: transparent;";
 
         String hover =
-                "-fx-background-color: #B0B0B0; " +
-                        "-fx-text-fill: #2C2C2C; " +
+                "-fx-background-color: #3498DB; " +
+                        "-fx-text-fill: white; " +
                         "-fx-font-size: 11px; " +
-                        "-fx-font-weight: normal; " +
+                        "-fx-font-weight: bold; " +
                         "-fx-padding: 3 18; " +
                         "-fx-background-radius: 4; " +
                         "-fx-cursor: hand; " +
@@ -320,20 +256,20 @@ public class MainView extends BorderPane {
         btn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
 
         String base =
-                "-fx-background-color: #D9D9D9; " +
-                        "-fx-text-fill: #2C2C2C; " +
+                "-fx-background-color: white; " +
+                        "-fx-text-fill: #2980B9; " +
                         "-fx-font-size: 12px; " +
-                        "-fx-font-weight: normal; " +
+                        "-fx-font-weight: bold; " +
                         "-fx-padding: 6 14; " +
                         "-fx-background-radius: 4; " +
                         "-fx-cursor: hand; " +
                         "-fx-border-color: transparent;";
 
         String hover =
-                "-fx-background-color: #B0B0B0; " +
-                        "-fx-text-fill: #2C2C2C; " +
+                "-fx-background-color: #3498DB; " +
+                        "-fx-text-fill: white; " +
                         "-fx-font-size: 12px; " +
-                        "-fx-font-weight: normal; " +
+                        "-fx-font-weight: bold; " +
                         "-fx-padding: 6 14; " +
                         "-fx-background-radius: 4; " +
                         "-fx-cursor: hand; " +
@@ -359,9 +295,7 @@ public class MainView extends BorderPane {
     }
 
     public void setStatus(String message) {
-        Platform.runLater(() -> {
-            userInfoLabel.setText(message);
-        });
+        Platform.runLater(() -> userInfoLabel.setText(message));
     }
 
     // ================================================================
@@ -372,177 +306,195 @@ public class MainView extends BorderPane {
         loginView = new LoginView();
     }
 
-    /**
-     * ===== HOME CONTENT - WELCOME PAGE WITH 4 INFO CARDS =====
-     * Shows a welcome message and 4 non-clickable resource cards.
-     * Cards display room IDs, capacity, building, and operating hours.
-     */
+    // ---------- HOME CONTENT ----------
+
     private void buildHomeContent() {
-        homeContent = new VBox(40);
-        homeContent.setAlignment(Pos.TOP_LEFT);
-        homeContent.setPadding(new Insets(40, 50, 40, 50));
+        homeContent = new VBox(20);
+        homeContent.setAlignment(Pos.TOP_CENTER);
+        homeContent.setPadding(new Insets(40, 20, 40, 20));
         homeContent.setId("homeContent");
         homeContent.setStyle("-fx-background-color: #F8F9FA;");
 
-        // ---- Top row: logo circle + heading/subtitle ----
         HBox headerRow = new HBox(30);
         headerRow.setAlignment(Pos.CENTER_LEFT);
         headerRow.setId("headerRow");
 
         StackPane logoCircle = new StackPane();
-        logoCircle.setPrefSize(100, 100);
-        logoCircle.setMaxSize(100, 100);
+        logoCircle.setPrefSize(70, 70);
+        logoCircle.setMaxSize(70, 70);
         logoCircle.setStyle("-fx-background-color: #DCDCDC; -fx-background-radius: 100;");
         Label logoLabel = new Label("CR");
-        logoLabel.setFont(Font.font("System", 40));
+        logoLabel.setFont(Font.font("System", 30));
         logoLabel.setStyle("-fx-text-fill: #2C3E50;");
         logoLabel.setId("logo");
         logoCircle.getChildren().add(logoLabel);
 
-        VBox textBlock = new VBox(10);
+        VBox textBlock = new VBox(5);
         textBlock.setAlignment(Pos.CENTER_LEFT);
 
         Label welcomeLabel = new Label("Welcome to Campus Resource Booking Companion");
-        welcomeLabel.setFont(Font.font("System", FontWeight.BOLD, 26));
+        welcomeLabel.setFont(Font.font("System", FontWeight.BOLD, 22));
         welcomeLabel.setStyle("-fx-text-fill: #2C3E50;");
         welcomeLabel.setId("welcomeLabel");
         welcomeLabel.setWrapText(true);
 
         Label subtitleLabel = new Label("Campus resources available for booking:");
-        subtitleLabel.setFont(Font.font("System", 16));
+        subtitleLabel.setFont(Font.font("System", 14));
         subtitleLabel.setStyle("-fx-text-fill: #7F8C8D;");
         subtitleLabel.setId("subtitleLabel");
 
         textBlock.getChildren().addAll(welcomeLabel, subtitleLabel);
         headerRow.getChildren().addAll(logoCircle, textBlock);
 
-        // ===== 4 INFORMATION CARDS WITH HOURS =====
         HBox cardsRow = new HBox(25);
         cardsRow.setAlignment(Pos.CENTER);
         cardsRow.setId("cardsRow");
-        cardsRow.setPadding(new Insets(15, 0, 0, 0));
+        cardsRow.setPadding(new Insets(20, 0, 0, 0));
 
-        cardsRow.getChildren().addAll(
-                createInfoCard("Discussion Room", "D9A.01, D9B.01, E9A.03", "Capacity: 4-8", "Building: D, E", "Open: 08:00 - 21:00"),
-                createInfoCard("Study Pod", "KA-P1, KA-P2", "Capacity: 1-2", "Building: LIB", "Open: 07:00 - 23:00"),
-                createInfoCard("Lab Workstation", "C7.01", "Capacity: 30", "Building: LAB", "Open: 08:00 - 22:00"),
-                createInfoCard("Sports Facility", "SP-B1", "Capacity: 40", "Building: OUT", "Open: 07:00 - 22:00")
-        );
+        if (campusService != null) {
+            List<Resource> resources = campusService.getAllResources();
+            if (!resources.isEmpty()) {
+                Map<String, List<Resource>> grouped = new HashMap<>();
+                for (Resource r : resources) {
+                    String type = r.getTypeName();
+                    grouped.computeIfAbsent(type, k -> new ArrayList<>()).add(r);
+                }
+
+                String[] typeOrder = {"Discussion Room", "Group Study Room", "Study Pod", "Lab Workstation", "Basketball Court"};
+                for (String typeName : typeOrder) {
+                    List<Resource> rooms = grouped.get(typeName);
+                    if (rooms != null && !rooms.isEmpty()) {
+                        StringBuilder roomsStr = new StringBuilder();
+                        for (int i = 0; i < rooms.size(); i++) {
+                            if (i > 0) roomsStr.append(", ");
+                            roomsStr.append(rooms.get(i).getResourceId());
+                        }
+                        String capacity = "Capacity: " + rooms.get(0).getCapacity();
+                        String building = "Building: " + rooms.get(0).getBuilding();
+                        String hours = "Open: " + ((rooms.get(0).getOpenTime() != null) ?
+                                rooms.get(0).getOpenTime() + " - " + rooms.get(0).getCloseTime() :
+                                "Check booking page");
+                        cardsRow.getChildren().add(
+                                createInfoCard(typeName, roomsStr.toString(), capacity, building, hours)
+                        );
+                    }
+                }
+            }
+        }
 
         VBox cardsWrapper = new VBox(cardsRow);
         cardsWrapper.setAlignment(Pos.CENTER);
         cardsWrapper.setPrefWidth(Double.MAX_VALUE);
 
-        homeContent.getChildren().addAll(headerRow, cardsWrapper);
+        VBox spacer = new VBox(10);
+        spacer.setPrefHeight(10);
+
+        homeContent.getChildren().addAll(spacer, headerRow, cardsWrapper);
     }
 
-    /**
-     * ===== BIGGER INFORMATION CARD WITH OPERATING HOURS =====
-     * Displays resource information including operating hours.
-     * No click handler - just shows information about campus resources.
-     */
     private VBox createInfoCard(String name, String rooms, String capacity, String building, String hours) {
-        VBox card = new VBox(8);
+        VBox card = new VBox(6);
         card.setAlignment(Pos.CENTER);
         card.setStyle(
-                "-fx-background-color: white; " +
+                "-fx-background-color: #F0F4F8; " +
                         "-fx-border-color: #E8ECF0; " +
                         "-fx-border-width: 1; " +
                         "-fx-border-radius: 14; " +
                         "-fx-background-radius: 14; " +
-                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 10, 0, 0, 4);"
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 12, 0, 0, 4);"
         );
-        card.setPadding(new Insets(25, 30, 25, 30));
-        card.setPrefWidth(180);
-        card.setPrefHeight(220);
+        card.setPadding(new Insets(18, 16, 18, 16));
+        card.setPrefWidth(190);
+        card.setPrefHeight(270);
 
-        // ---- Hover effect (just visual, no click) ----
-        card.setOnMouseEntered(e -> {
-            card.setStyle(
-                    "-fx-background-color: #F8F9FA; " +
-                            "-fx-border-color: #B0B0B0; " +
-                            "-fx-border-width: 1.5; " +
-                            "-fx-border-radius: 14; " +
-                            "-fx-background-radius: 14; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 12, 0, 0, 6);"
-            );
-            card.setScaleX(1.02);
-            card.setScaleY(1.02);
-        });
+        // ❌ REMOVED: onMouseEntered and onMouseExited
 
-        card.setOnMouseExited(e -> {
-            card.setStyle(
-                    "-fx-background-color: white; " +
-                            "-fx-border-color: #E8ECF0; " +
-                            "-fx-border-width: 1; " +
-                            "-fx-border-radius: 14; " +
-                            "-fx-background-radius: 14; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 10, 0, 0, 4);"
-            );
-            card.setScaleX(1.0);
-            card.setScaleY(1.0);
-        });
-
-        // ---- Icon ----
         Label iconLabel = new Label(name.substring(0, 1));
-        iconLabel.setFont(Font.font("System", FontWeight.BOLD, 38));
+        iconLabel.setFont(Font.font("System", FontWeight.BOLD, 36));
         iconLabel.setStyle("-fx-text-fill: #2C3E50;");
-        iconLabel.setId("cardIcon");
+        iconLabel.setMaxWidth(Double.MAX_VALUE);
+        iconLabel.setAlignment(Pos.CENTER);
 
-        // ---- Resource Name ----
         Label nameLabel = new Label(name);
-        nameLabel.setFont(Font.font("System", FontWeight.BOLD, 15));
+        nameLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
         nameLabel.setStyle("-fx-text-fill: #2C3E50;");
-        nameLabel.setId("cardName");
+        nameLabel.setWrapText(true);
+        nameLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+        nameLabel.setAlignment(Pos.CENTER);
+        nameLabel.setMaxWidth(160);
 
-        // ---- Separator ----
         Label separator = new Label("─");
         separator.setStyle("-fx-text-fill: #D5D8DC;");
         separator.setFont(Font.font("System", 12));
+        separator.setMaxWidth(Double.MAX_VALUE);
+        separator.setAlignment(Pos.CENTER);
 
-        // ---- Room IDs ----
         Label roomLabel = new Label(rooms);
         roomLabel.setFont(Font.font("System", 11));
         roomLabel.setStyle("-fx-text-fill: #5D6D7E;");
-        roomLabel.setId("cardRooms");
+        roomLabel.setWrapText(true);
+        roomLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+        roomLabel.setAlignment(Pos.CENTER);
+        roomLabel.setMaxWidth(160);
 
-        // ---- Capacity ----
         Label capacityLabel = new Label(capacity);
         capacityLabel.setFont(Font.font("System", 11));
         capacityLabel.setStyle("-fx-text-fill: #5D6D7E;");
-        capacityLabel.setId("cardCapacity");
+        capacityLabel.setMaxWidth(Double.MAX_VALUE);
+        capacityLabel.setAlignment(Pos.CENTER);
 
-        // ---- Building ----
         Label buildingLabel = new Label(building);
         buildingLabel.setFont(Font.font("System", 11));
         buildingLabel.setStyle("-fx-text-fill: #5D6D7E;");
-        buildingLabel.setId("cardBuilding");
+        buildingLabel.setMaxWidth(Double.MAX_VALUE);
+        buildingLabel.setAlignment(Pos.CENTER);
 
-        // ---- Operating Hours ----
         Label hoursLabel = new Label(hours);
         hoursLabel.setFont(Font.font("System", 11));
         hoursLabel.setStyle("-fx-text-fill: #27AE60; -fx-font-weight: bold;");
-        hoursLabel.setId("cardHours");
+        hoursLabel.setMaxWidth(Double.MAX_VALUE);
+        hoursLabel.setAlignment(Pos.CENTER);
 
-        card.getChildren().addAll(iconLabel, nameLabel, separator, roomLabel, capacityLabel, buildingLabel, hoursLabel);
+        boolean showUnavailable = !name.equals("Study Pod") && !name.equals("Basketball Court");
+        Label unavailableLabel = new Label("     Currently unavailable\ndue to MCP server limitation");
+        unavailableLabel.setFont(Font.font("System", 8));
+        unavailableLabel.setStyle("-fx-text-fill: #E74C3C; -fx-font-weight: bold;");
+        unavailableLabel.setAlignment(Pos.CENTER);
+        unavailableLabel.setVisible(showUnavailable);
+        unavailableLabel.setManaged(showUnavailable);
+        unavailableLabel.setMaxWidth(Double.MAX_VALUE);
+
+        card.getChildren().addAll(
+                iconLabel,
+                nameLabel,
+                separator,
+                roomLabel,
+                capacityLabel,
+                buildingLabel,
+                hoursLabel,
+                unavailableLabel
+        );
         return card;
     }
 
+    // ---------- BOOKING VIEWS ----------
+    // ✅ FIXED: Only create the Views, no CampusService
     private void buildBookingViews() {
         bookingView = new BookingView();
         viewBookingView = new ViewBookingView();
-
-        CampusMcpClient bookingMcpClient = (mcp != null) ? mcp : new CampusMcpClient("http://localhost:8080");
-        campusService = new CampusService(bookingMcpClient, dataStorage);
-
-        bookingController = new BookingController(bookingView, campusService);
-        viewBookingController = new ViewBookingController(viewBookingView, campusService);
+        // CampusService, LoginController, etc. will be created in bind() with real MCP
     }
 
+    // ---------- FAQ VIEW ----------
+    // ✅ FIXED: Only create the View, no controller yet
     private void buildFAQView() {
         faqView = new FAQView();
+        // FAQController will be created in rebuildFAQView() when RAG is available
+    }
 
-        if (rag != null) {
+    // ✅ NEW: Method to create FAQController when rag is available
+    private void rebuildFAQView() {
+        if (rag != null && faqView != null) {
             faqController = new FAQController(rag, faqView);
             faqView.setController(faqController);
             System.out.println("FAQController created and connected to FAQView");
@@ -551,6 +503,7 @@ public class MainView extends BorderPane {
         }
     }
 
+    // ---------- PLACEHOLDERS ----------
     private void buildPlaceholders() {
         availabilityPlaceholder = createPlaceholder("Resource Availability");
     }
@@ -559,13 +512,10 @@ public class MainView extends BorderPane {
         VBox box = new VBox(10);
         box.setAlignment(Pos.CENTER);
         box.setPadding(new Insets(100));
-
         Label titleLabel = new Label(title);
         titleLabel.setFont(Font.font("System", FontWeight.BOLD, 20));
-
         Label msgLabel = new Label("Coming soon...");
         msgLabel.setStyle("-fx-text-fill: #7F8C8D;");
-
         box.getChildren().addAll(titleLabel, msgLabel);
         return box;
     }
@@ -585,10 +535,7 @@ public class MainView extends BorderPane {
         setCenter(homeContent);
         showAllNavButtons();
         updateMCPStatus(mcp != null);
-
-        if (bookingView != null) {
-            bookingView.setStudentId(currentStudentId);
-        }
+        if (bookingView != null) bookingView.setStudentId(currentStudentId);
     }
 
     public void showBooking() {
@@ -612,20 +559,20 @@ public class MainView extends BorderPane {
 
     public void showPolicy() {
         System.out.println("showPolicy() called");
-        System.out.println("faqView is: " + (faqView == null ? "NULL" : "NOT NULL"));
-
-        if (faqView != null) {
+        System.out.println("faqView: " + (faqView == null ? "NULL" : "NOT NULL"));
+        System.out.println("faqController: " + (faqController == null ? "NULL" : "NOT NULL"));
+        if (faqView != null && faqController != null) {
             setCenter(faqView.getRoot());
             faqView.onShow();
             System.out.println("FAQView displayed");
         } else {
-            System.out.println("faqView is NULL - showing placeholder");
+            System.out.println("faqView or faqController is NULL - showing placeholder");
             setCenter(createPlaceholder("Policy Assistant"));
         }
     }
 
     // ================================================================
-    // LOGOUT (FR10) - FIXED: MCP Status Stays Connected
+    // LOGOUT
     // ================================================================
 
     private void handleLogout() {
@@ -633,19 +580,13 @@ public class MainView extends BorderPane {
         alert.setTitle("Logout");
         alert.setHeaderText(null);
         alert.setContentText("Are you sure you want to logout?");
-
         alert.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 currentStudentId = "";
-                if (loginView != null) {
-                    loginView.clearFields();
-                }
+                if (loginView != null) loginView.clearFields();
                 showLogin();
                 hideAllNavButtons();
                 userInfoLabel.setText("");
-                // ===== FIX: MCP connection is independent of user login =====
-                // Do NOT change MCP status on logout - it should stay connected
-                // updateMCPStatus(false);  // ← REMOVED
             }
         });
     }
@@ -681,69 +622,69 @@ public class MainView extends BorderPane {
         });
     }
 
-    public LoginView getLoginView() {
-        return loginView;
-    }
-
-    public ExecutorService getWorker() {
-        return worker;
-    }
+    public LoginView getLoginView() { return loginView; }
 
     // ================================================================
     // MCP BINDING
     // ================================================================
 
     public void bind(CampusMcpClient mcp, RagService rag) {
+        // Quick test call
+        if (mcp != null) {
+            new Thread(() -> {
+                try {
+                    String result = mcp.callTool("check_room_availability", Map.of("date", "2026-07-25"));
+                    System.out.println("DEBUG SERVER RESPONSE:\n" + result);
+                } catch (Exception e) { e.printStackTrace(); }
+            }).start();
+        }
+
         this.mcp = mcp;
         this.rag = rag;
         updateMCPStatus(mcp != null);
 
+        // ✅ FIX: Rebuild FAQController now that rag is available
+        rebuildFAQView();
+
         if (mcp != null && bookingView != null && viewBookingView != null) {
+            // ✅ Create REAL CampusService with connected MCP
             campusService = new CampusService(mcp, dataStorage);
+            campusService.loadResources();
+
+            // ✅ Create LoginController with real service
+            loginController = new LoginController(
+                    loginView,
+                    campusService,
+                    createLoginCallback()
+            );
+
             bookingController = new BookingController(bookingView, campusService);
+            setBookingController(bookingController);
+
+            // Rebuild home content with real data
+            buildHomeContent();
+
             viewBookingController = new ViewBookingController(viewBookingView, campusService);
+            viewBookingView.setController(viewBookingController);
+
             if (!currentStudentId.isEmpty()) {
                 viewBookingController.setStudentId(currentStudentId);
             }
             System.out.println("Booking screens rebuilt with a real connected MCP client");
         }
-
-        if (rag != null && faqView != null) {
-            faqController = new FAQController(rag, faqView);
-            faqView.setController(faqController);
-            System.out.println("FAQController connected to existing FAQView");
-        }
-
-        else if(rag !=null){
-            faqView = new FAQView();
-            faqController = new FAQController(rag,faqView);
-            faqView.setController(faqController);
-            System.out.println("FAQController created and connected to new FAQView");
-        }
-
-
-        else{
-            System.out.println("RAG service not available (API key missing?)");
-        }
     }
 
-    public CampusMcpClient getMcp() {
-        return mcp;
-    }
-
-    public RagService getRag() {
-        return rag;
-    }
+    public CampusMcpClient getMcp() { return mcp; }
+    public RagService getRag() { return rag; }
 
     // ================================================================
-    // REFRESH DISCOVERY (For debugging)
+    // REFRESH DISCOVERY
     // ================================================================
 
     public void refreshDiscovery() {
-        if (mcp == null) {
-            return;
-        }
-        worker.submit(() -> {
+        if (mcp == null) return;
+        if (workerThread != null && workerThread.isAlive()) workerThread.interrupt();
+        workerThread = new Thread(() -> {
             try {
                 String tools = mcp.listTools().stream()
                         .map(t -> "  • " + t.name() + " — " + t.description())
@@ -753,13 +694,18 @@ public class MainView extends BorderPane {
                 System.err.println("Discovery failed: " + e.getMessage());
             }
         });
+        workerThread.setDaemon(true);
+        workerThread.setName("ui-worker");
+        workerThread.start();
     }
 
     // ================================================================
-    // getRoot() - For App.java
+    // getRoot() & setBookingController
     // ================================================================
 
-    public BorderPane getRoot() {
-        return this;
+    public BorderPane getRoot() { return this; }
+
+    public void setBookingController(BookingController controller) {
+        this.bookingController = controller;
     }
 }
