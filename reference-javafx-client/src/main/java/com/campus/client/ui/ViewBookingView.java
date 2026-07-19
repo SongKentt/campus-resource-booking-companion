@@ -266,3 +266,4 @@ public class ViewBookingView extends BaseView {
         label.setAlignment(Pos.CENTER);
     }
 }
+
