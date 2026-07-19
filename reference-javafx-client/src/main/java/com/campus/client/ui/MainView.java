@@ -602,14 +602,10 @@ public class MainView extends BorderPane {
             campusService = new CampusService(mcp, dataStorage);
             campusService.loadResources();
 
-            loginController = new LoginController(
-                    loginView,
-                    campusService,
-                    createLoginCallback()
-            );
+            loginController = new LoginController(loginView, campusService, createLoginCallback());
 
             bookingController = new BookingController(bookingView, campusService);
-            setBookingController(bookingController);
+            bookingView.setController(bookingController);
 
             // rebuild home content with real resource data now that we have campusService
             buildHomeContent();
@@ -621,30 +617,5 @@ public class MainView extends BorderPane {
                 viewBookingController.setStudentId(currentStudentId);
             }
         }
-    }
-
-
-    // lists all available mcp tools
-    public void refreshDiscovery() {
-        if (mcp == null) return;
-        if (workerThread != null && workerThread.isAlive()) workerThread.interrupt();
-        workerThread = new Thread(() -> {
-            try {
-                String tools = mcp.listTools().stream()
-                        .map(t -> "  • " + t.name() + " — " + t.description())
-                        .collect(Collectors.joining("\n"));
-                System.out.println("MCP Tools:\n" + tools);
-            } catch (Exception e) {
-                System.err.println("Discovery failed: " + e.getMessage());
-            }
-        });
-        workerThread.setDaemon(true);
-        workerThread.setName("ui-worker");
-        workerThread.start();
-    }
-
-
-    public void setBookingController(BookingController controller) {
-        this.bookingController = controller;
     }
 }
