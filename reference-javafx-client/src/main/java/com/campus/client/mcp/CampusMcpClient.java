@@ -38,9 +38,18 @@ public final class CampusMcpClient implements AutoCloseable {
     private final String baseUrl;
     private McpSyncClient client;
 
+    // Callback that runs when the server disconnects, which is registered in the MainView.
+    private Runnable onDisconnect;
+
     public CampusMcpClient(String baseUrl) {
         this.baseUrl = baseUrl;
     }
+
+    // When the server is disconnected, register a callback
+    public void setOnDisconnect(Runnable callback) {
+        this.onDisconnect = callback;
+    }
+
 
     /** Opens the SSE stream and performs the MCP initialize handshake. */
     public McpSchema.InitializeResult connect() {
@@ -61,44 +70,92 @@ public final class CampusMcpClient implements AutoCloseable {
         return init;
     }
 
+    // This method is to list available tools offered by the mcp and a try catch block is added to trigger disconnection callback on failure
     public List<McpSchema.Tool> listTools() {
-        return client.listTools().tools();
+        try {
+            return client.listTools().tools();
+        } catch (Exception e) {
+            if (onDisconnect != null){
+                onDisconnect.run();
+            }
+            throw new RuntimeException("Failed to list tools", e);
+        }
     }
 
+    // this method is to list available resource offered by the mcp and a try catch block is added to trigger disconnection callback on failure
     public List<McpSchema.Resource> listResources() {
-        return client.listResources().resources();
+        try {
+            return client.listResources().resources();
+        } catch (Exception e) {
+            if (onDisconnect != null){
+                onDisconnect.run();
+            }
+            throw new RuntimeException("Failed to list resources", e);
+        }
     }
 
+    // this method is to list all prompts offered by the mcp and a try catch block is added to trigger disconnection callback on failure
     public List<McpSchema.Prompt> listPrompts() {
-        return client.listPrompts().prompts();
+        try {
+            return client.listPrompts().prompts();
+        } catch (Exception e) {
+            if (onDisconnect != null) {
+                onDisconnect.run();
+            }
+            throw new RuntimeException("Failed to list prompts", e);
+        }
     }
 
     /** Calls a tool and flattens its text content into one string. */
+    // Try-catch block is added to trigger disconnection callback on failure
     public String callTool(String name, Map<String, Object> arguments) {
         log.info("callTool {} {}", name, arguments);
-        CallToolResult result = client.callTool(new CallToolRequest(name, arguments));
-        String text = result.content().stream()
-                .filter(c -> c instanceof TextContent)
-                .map(c -> ((TextContent) c).text())
-                .collect(Collectors.joining("\n"));
-        return Boolean.TRUE.equals(result.isError()) ? "ERROR: " + text : text;
+        try {
+            CallToolResult result = client.callTool(new CallToolRequest(name, arguments));
+            String text = result.content().stream()
+                    .filter(c -> c instanceof TextContent)
+                    .map(c -> ((TextContent) c).text())
+                    .collect(Collectors.joining("\n"));
+            return Boolean.TRUE.equals(result.isError()) ? "ERROR: " + text : text;
+        } catch (Exception e) {
+            if (onDisconnect != null){
+                onDisconnect.run();
+            }
+            throw new RuntimeException("MCP callTool failed for " + name, e);
+        }
     }
 
     /** Reads a resource and returns its concatenated text contents. */
+    // Try-catch block is added to trigger disconnection callback on failure
     public String readResource(String uri) {
-        ReadResourceResult result = client.readResource(new ReadResourceRequest(uri));
-        return result.contents().stream()
-                .filter(c -> c instanceof TextResourceContents)
-                .map(c -> ((TextResourceContents) c).text())
-                .collect(Collectors.joining("\n"));
+        try {
+            ReadResourceResult result = client.readResource(new ReadResourceRequest(uri));
+            return result.contents().stream()
+                    .filter(c -> c instanceof TextResourceContents)
+                    .map(c -> ((TextResourceContents) c).text())
+                    .collect(Collectors.joining("\n"));
+        } catch (Exception e) {
+            if (onDisconnect != null){
+                onDisconnect.run();
+            }
+            throw new RuntimeException("MCP readResource failed for " + uri, e);
+        }
     }
 
     /** Fetches a server-defined prompt template, returning its rendered text. */
+    // Try-catch block is added to trigger disconnection callback on failure
     public String getPrompt(String name, Map<String, Object> arguments) {
-        GetPromptResult result = client.getPrompt(new GetPromptRequest(name, arguments));
-        return result.messages().stream()
-                .map(m -> m.content() instanceof TextContent tc ? tc.text() : "")
-                .collect(Collectors.joining("\n"));
+        try {
+            GetPromptResult result = client.getPrompt(new GetPromptRequest(name, arguments));
+            return result.messages().stream()
+                    .map(m -> m.content() instanceof TextContent tc ? tc.text() : "")
+                    .collect(Collectors.joining("\n"));
+        } catch (Exception e) {
+            if (onDisconnect != null){
+                onDisconnect.run();
+            }
+            throw new RuntimeException("MCP getPrompt failed for " + name, e);
+        }
     }
 
     @Override
