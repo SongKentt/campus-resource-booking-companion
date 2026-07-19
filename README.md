@@ -7,11 +7,11 @@
 This project was developed by:
 
 ### Group 14
-1. Leong Song Kent
-2. See Qui Ven
-3. Lau Ern Ling
-4. Lean Wen Xi
-5. Hoo Tyng En 
+1. Leong Song Kent 0375421
+2. See Qui Ven 0377465
+3. Lau Ern Ling 0387332
+4. Lean Wen Xi 0376612
+5. Hoo Tyng En 0387409
 
 ---
 
@@ -23,7 +23,7 @@ The app has two main parts: an MCP server that handles all the backend stuff lik
 
 Since the assignment said no Spring, Quarkus, or databases, everything is stored in plain text files instead.
 
-
+---
 
 ## Project Structure
 
