@@ -1,5 +1,19 @@
-
 # Campus Resource Booking Companion
+
+---
+
+## Team Members
+
+This project was developed by:
+
+### Group 14
+1. Leong Song Kent
+2. See Qui Ven
+3. Lau Ern Ling
+4. Lean Wen Xi
+5. Hoo Tyng En 
+
+---
 
 ## Overview
 
@@ -9,7 +23,7 @@ The app has two main parts: an MCP server that handles all the backend stuff lik
 
 Since the assignment said no Spring, Quarkus, or databases, everything is stored in plain text files instead.
 
----
+
 
 ## Project Structure
 
@@ -38,6 +52,7 @@ You will also need an **Anthropic API Key** if you want to use the AI assistant 
 After you extract the ZIP file and open the project in IntelliJ, **you must load the Maven dependencies first** before running anything.
 
 When you open the project, look at the bottom right or top right corner of IntelliJ. You will see a popup or a button that says **"Load"** with a **Load** button. **Click Load** and wait for IntelliJ to finish downloading all the dependencies.
+
 ![img_1.png](img_1.png)
 
 ---
@@ -69,9 +84,10 @@ This is the easiest way to get things running.
 1. At the top right, click the dropdown next to the Run button and select **Edit Configurations**
 2. Click the **+** and choose **Application**.
 3. Fill in the details:
-   - **Name:** `Launcher` as shwon in figure below:
+   - **Name:** `Launcher` as shown in figure below:
+
      ![img.png](img.png)
-   - 
+
    - **Module:** `reference-javafx-client`
    - **Main Class:** `Launcher`
    - **JDK:** `JDK 25`
