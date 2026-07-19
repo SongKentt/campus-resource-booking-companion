@@ -48,7 +48,7 @@ public class Resource {
         return closeTime;
     }
 
-    // Getter method that return the resource type in a human‑readable type name to display to the user */
+    // Getter method that return the resource type in a user-friendly resource type name to display to the user */
     public String getTypeName() {
         switch (typeName) {
             case "discussion_room":

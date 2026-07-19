@@ -23,11 +23,12 @@ public class ViewBookingView extends BaseView {
 
     private ViewBookingController controller;
 
-    // pill-style switch between Upcoming and Past
+    // Toggle buttons that allow the user to switch between upcoming and past bookings
     private final ToggleGroup switchGroup = new ToggleGroup();
     private final ToggleButton upcomingToggle = new ToggleButton("Upcoming Bookings");
     private final ToggleButton pastToggle = new ToggleButton("Past Bookings");
 
+    // Tables and their backing data
     private final TableView<Booking> upcomingTable = new TableView<>();
     private final ObservableList<Booking> upcomingData = FXCollections.observableArrayList();
 
@@ -54,10 +55,7 @@ public class ViewBookingView extends BaseView {
     public void onHide() {
     }
 
-    // ---------------------------------------------------------------
-    // building the screen
-    // ---------------------------------------------------------------
-
+    // Build the UI layout
     private void buildLayout() {
         setStyle("-fx-background-color: #f5f5f5;");
 
@@ -80,7 +78,7 @@ public class ViewBookingView extends BaseView {
         getChildren().addAll(buildHeroBanner("Booking History"), mainContent);
     }
 
-    /** Navy title banner under the navbar. */
+    // Navy color title banner
     private VBox buildHeroBanner(String title) {
         Label titleLabel = new Label(title);
         titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 26));
@@ -93,6 +91,7 @@ public class ViewBookingView extends BaseView {
         return banner;
     }
 
+    // Build a pill-style toggle swtich so that the user can switch between the upcoming and past bookings
     private HBox buildSwitch() {
         upcomingToggle.setToggleGroup(switchGroup);
         pastToggle.setToggleGroup(switchGroup);
@@ -123,6 +122,7 @@ public class ViewBookingView extends BaseView {
                 : "-fx-background-color: #E0E0E0; -fx-text-fill: #333333; -fx-background-radius: " + cornerRadius + ";";
     }
 
+    // Build a pill-style toggle switch so that the user can switch between the upcoming and past bookings
     @SuppressWarnings("unchecked")
     private void buildUpcomingTable() {
         TableColumn<Booking, Void> cancelCol = new TableColumn<>("");
@@ -163,6 +163,7 @@ public class ViewBookingView extends BaseView {
         upcomingTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
     }
 
+    // Build a past booking table to display all the past bookings without cancel button column
     @SuppressWarnings("unchecked")
     private void buildPastTable() {
         TableColumn<Booking, String> refCol        = makeColumn("Reference No.",  "bookingRef",  140);
@@ -177,6 +178,7 @@ public class ViewBookingView extends BaseView {
         pastTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
     }
 
+    // Sets up the toggle switch listener to swap the visible table, which is either upcoming or past booking table
     private void wireEvents() {
         switchGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
             if (newToggle == null) {
@@ -199,7 +201,9 @@ public class ViewBookingView extends BaseView {
         }
     }
 
-    // ===== FIX: Pass booking reference (String) to controller =====
+    /*  When the user click the button, this method is used to handles the cancel button click where it shows
+        a confirmation dialog and, if confirmed, the controller will be called to cancel the booking
+     */
     private void cancelBooking(Booking booking) {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Cancel Booking");
@@ -218,10 +222,8 @@ public class ViewBookingView extends BaseView {
         });
     }
 
-    // ---------------------------------------------------------------
-    // Controller calls these to update the UI
-    // ---------------------------------------------------------------
-
+    // UI update method that is called by the controller
+    // Fill up both table with the provided booking lists
     public void displayBookings(List<Booking> upcoming, List<Booking> past) {
         upcomingData.setAll(upcoming);
         pastData.setAll(past);
@@ -248,10 +250,7 @@ public class ViewBookingView extends BaseView {
         statusLabel.setVisible(true);
     }
 
-    // ---------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------
-
+    // Helper methods
     private TableColumn<Booking, String> makeColumn(String title, String property, double prefWidth) {
         TableColumn<Booking, String> col = new TableColumn<>(title);
         col.setCellValueFactory(new PropertyValueFactory<>(property));

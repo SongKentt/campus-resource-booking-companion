@@ -80,7 +80,9 @@ public class ViewBookingController {
         return false;
     }
 
-    // Cancel the active booking that is not categorized as past with booking reference number
+    /* Cancel the active booking that is not categorized as past with booking reference number then call loadbooking()
+       to update the view and display the student upcoming and past bookings.
+     */
     public void handleCancelBooking(String bookingRef) {
         if (bookingRef == null || bookingRef.isEmpty()) {
             view.showError("No booking selected to cancel.");

@@ -36,6 +36,7 @@ public class LoginView extends BaseView {
         this.controller = controller;
     }
 
+    // Build the login card UI
     private void buildUI() {
         setAlignment(Pos.CENTER);
         setStyle("-fx-background-color: #ECF0F1;");
@@ -56,6 +57,7 @@ public class LoginView extends BaseView {
         getChildren().add(card);
     }
 
+    // Creates a CR logo panel on the left
     private StackPane buildLogoPlaceholder() {
         StackPane box = new StackPane();
         box.setPrefSize(260, 380);
@@ -73,6 +75,7 @@ public class LoginView extends BaseView {
         return box;
     }
 
+    // Create a login form panel on the right with multiple login input fields and a login button
     private VBox buildForm() {
         VBox form = new VBox(10);
         form.setPadding(new Insets(30, 40, 30, 40));
@@ -124,6 +127,7 @@ public class LoginView extends BaseView {
         );
         VBox.setMargin(loginButton, new Insets(24, 0, 0, 0));
 
+        // Event Handling where clicking the login button or press enter in the text field will call the attemptlogin()
         studentIdField.setOnAction(_ -> attemptLogin());
         passwordField.setOnAction(_ -> attemptLogin());
         loginButton.setOnAction(_ -> attemptLogin());
@@ -137,7 +141,7 @@ public class LoginView extends BaseView {
         return form;
     }
 
-    // Call the login controller
+    // This method will be called when the user attempt to log in. It will pass it to the controller to validate the login.
     private void attemptLogin() {
         if (controller != null) {
             controller.handleLogin();
@@ -155,7 +159,7 @@ public class LoginView extends BaseView {
         return passwordField.getText() == null ? "" : passwordField.getText();
     }
 
-    // Error display
+    // Methods to display error
     public void showStudentIdError(String message) {
         studentIdError.setText(message);
         showFieldError(studentIdError);
@@ -186,11 +190,13 @@ public class LoginView extends BaseView {
         label.setManaged(false);
     }
 
+    // Disables the login button and changes its text to indicate progress
     public void setLoginButtonDisabled(boolean disabled) {
         loginButton.setDisable(disabled);
         loginButton.setText(disabled ? "Logging in..." : "Login");
     }
 
+    // Clear all the input fields, reset all the error states, enable the button
     public void clearFields() {
         studentIdField.clear();
         passwordField.clear();
