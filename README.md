@@ -1,3 +1,4 @@
+
 # Campus Resource Booking Companion
 
 ## Overview
@@ -32,6 +33,15 @@ You will also need an **Anthropic API Key** if you want to use the AI assistant 
 
 ---
 
+## Important First Step After Extracting
+
+After you extract the ZIP file and open the project in IntelliJ, **you must load the Maven dependencies first** before running anything.
+
+When you open the project, look at the bottom right or top right corner of IntelliJ. You will see a popup or a button that says **"Load"** with a **Load** button. **Click Load** and wait for IntelliJ to finish downloading all the dependencies.
+![img_1.png](img_1.png)
+
+---
+
 ## Method 1 – Running with IntelliJ IDEA
 
 This is the easiest way to get things running.
@@ -42,7 +52,7 @@ This is the easiest way to get things running.
 
 1. Launch IntelliJ IDEA.
 2. Click **Open** and select the project folder.
-3. Let IntelliJ do its thing and import all the Maven dependencies (it might take a minute).
+3. When IntelliJ opens, **click the Load button** when it appears (usually at the top right or bottom right) to load the Maven dependencies. Wait for it to finish completely.
 
 ---
 
@@ -59,8 +69,9 @@ This is the easiest way to get things running.
 1. At the top right, click the dropdown next to the Run button and select **Edit Configurations**
 2. Click the **+** and choose **Application**.
 3. Fill in the details:
-   - **Name:** `Launcher` as shown as figure below
-   - ![img.png](img.png)
+   - **Name:** `Launcher` as shwon in figure below:
+     ![img.png](img.png)
+   - 
    - **Module:** `reference-javafx-client`
    - **Main Class:** `Launcher`
    - **JDK:** `JDK 25`
@@ -171,13 +182,13 @@ If you see `pom.xml`, you are good to go.
 
 ### Step 4: Build the Project
 
-Run:
+**This is the most important step.** Run:
 
 ```powershell
 mvn clean package
 ```
 
-This will download all the dependencies and build both modules. It might take a while to finish.
+This will download all the dependencies and build both modules. It might take a while to finish. **Do not skip this step.**
 
 ---
 
@@ -282,4 +293,3 @@ The server automatically updates these files whenever something changes in the a
 - You need an **Anthropic API Key** for the AI assistant to work
 - Double-check that you are in the right folder before running any Maven commands (you should see `pom.xml`)
 - This project follows the assignment spec: Java, JavaFX, Maven, MCP, HTTP/SSE and plain text files - no Spring, Quarkus, or databases
-
