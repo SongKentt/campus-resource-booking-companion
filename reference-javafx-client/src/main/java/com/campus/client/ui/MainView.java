@@ -49,6 +49,7 @@ public class MainView extends BorderPane {
 
     // Multiple content views
     private LoginView loginView;
+    private LoginController loginController;
     private VBox homeContent;
     private String currentStudentId = "";
 
@@ -66,14 +67,11 @@ public class MainView extends BorderPane {
     private RagService rag;
     private FAQController faqController;
 
-
-
-    // status label for logging
     private Label statusLabel;
 
 
     private DataStorage dataStorage;
-    private LoginController loginController;
+
 
     // Constructor for MainView
     public MainView() {
@@ -109,14 +107,9 @@ public class MainView extends BorderPane {
         File userDataFile = new File(dataDir, "userData.txt");
         File bookingFile = new File(dataDir, "bookingRecord.txt");
 
-        try {
-            dataStorage = new DataStorage(userDataFile.getPath(), bookingFile.getPath());
-            List<Student> students = dataStorage.loadStudents();
-            System.out.println("Loaded " + students.size() + " users from: " + userDataFile.getPath());
-        } catch (Exception e) {
-            System.err.println("Failed to load user data from file: " + e.getMessage());
-            dataStorage = new DataStorage(userDataFile.getPath(), bookingFile.getPath());
-        }
+        dataStorage = new DataStorage(userDataFile.getPath(), bookingFile.getPath());
+        List<Student> students = dataStorage.loadStudents();
+        System.out.println("Loaded " + students.size() + " users from: " + userDataFile.getPath());
     }
 
     /* Creates a callback that is invoked when the login is successful, so that it can store the student id,
@@ -582,18 +575,18 @@ public class MainView extends BorderPane {
 
     // binds the mcp client and rag service to the views and creates all controllers
     public void bind(CampusMcpClient mcp, RagService rag) {
-        // quick test call to check if server is responding
-        if (mcp != null) {
-            new Thread(() -> {
-                try {
-                    String result = mcp.callTool("check_room_availability", Map.of("date", "2026-07-25"));
-                } catch (Exception e) { e.printStackTrace(); }
-            }).start();
-        }
-
         this.mcp = mcp;
         this.rag = rag;
+        // The dot is set to green initially if the mcp server is connected
         updateMCPStatus(mcp != null);
+
+        /* As mentioned, a callback is registered to turn the dot RED when the server disconnects. The callback runs
+        on the MCP thread, so Platform.runLater() is used to safely update the JavaFX UI. This means that when a mcp service
+        is used when the server is disconnected, the dot will turn to red
+         */
+        if (mcp != null) {
+            mcp.setOnDisconnect(() -> Platform.runLater(() -> updateMCPStatus(false)));
+        }
 
         rebuildFAQView();
 
