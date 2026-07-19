@@ -1,494 +1,729 @@
-package com.campus.client.controller;
+package com.campus.client.ui;
 
-import com.campus.client.model.Booking;
+import com.campus.client.controller.BookingController;
 import com.campus.client.model.Resource;
-import com.campus.client.service.CampusService;
-import com.campus.client.ui.BookingView;
-import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-public class BookingController {
+// this is the screen where the student books a resource
+// it only handles UI stuff (building the layout, showing/hiding fields, reading input)
+// any actual booking logic goes through the controller, this class doesnt talk to the server itself
+public class BookingView extends BaseView {
 
-    // ================================================================
-    // CONSTANTS
-    // ================================================================
+    private BookingController controller;
 
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-    private static final int STATUS_ACTIVE = 0;
+    // these fields are always shown on the screen
+    private ComboBox<String> resourceTypeCombo;
+    private TextField dateField;
+    private Button checkAvailabilityButton;
 
-    // ================================================================
-    // DEPENDENCIES
-    // ================================================================
+    // these are hidden until user clicks Check Availability
+    private Label availableRoomsLabel;
+    private VBox availableRoomsBox;
+    private Label roomLabel;
+    private ComboBox<String> roomCombo;
+    private Label startLabel;
+    private TextField startTimeField;
+    private Label endLabel;
+    private TextField endTimeField;
+    private Button bookButton;
 
-    private final BookingView view;
-    private final CampusService campusService;
+    // shown after a booking succeeds, lets user go back and book something else
+    private Button backButton;
 
-    // ================================================================
-    // DATA
-    // ================================================================
+    // the big confirmation panel that replaces the form after a successful booking
+    private VBox confirmationCard;
+    private Label confirmationTitle;
+    private Label confirmationRef;
+    private VBox mainCard;
 
-    private List<Resource> allResources = new ArrayList<>();
-    private List<String> availableResourceTypes = new ArrayList<>();
+    private Label statusLabel;
+    private TextField studentIdField;
 
-    // ================================================================
-    // OPERATING HOURS PER BUILDING
-    // ================================================================
-
-    private static final Map<String, String[]> OPERATING_HOURS = Map.of(
-            "D", new String[]{"08:00", "21:00"},
-            "E", new String[]{"08:00", "21:00"},
-            "LAB", new String[]{"08:00", "22:00"},
-            "LIB", new String[]{"07:00", "23:00"},
-            "OUT", new String[]{"07:00", "22:00"}
-    );
-
-    // ================================================================
-    // BACKGROUND THREAD
-    // ================================================================
-
-    private final ExecutorService worker = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "booking-worker");
-        t.setDaemon(true);
-        return t;
-    });
-
-    // ================================================================
-    // CONSTRUCTOR
-    // ================================================================
-
-    public BookingController(BookingView view, CampusService campusService) {
-        this.view = view;
-        this.campusService = campusService;
-        view.setController(this);
-
-        worker.submit(() -> {
-            loadResourcesFromServer();
-        });
+    public BookingView() {
+        buildUI();
     }
 
-    // ================================================================
-    // LOAD RESOURCES FROM MCP SERVER
-    // ================================================================
+    // builds the whole screen layout, this is a long method but its just adding one component after another
+    private void buildUI() {
+        // put everything inside a scroll pane in case the form gets too tall for the window
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setStyle("-fx-background-color: #F0F4F8; -fx-background: #F0F4F8;");
 
-    private void loadResourcesFromServer() {
-        try {
-            String facilitiesData = campusService.getFacilities();
+        VBox mainContainer = new VBox(25);
+        mainContainer.setPadding(new Insets(30));
+        mainContainer.setAlignment(Pos.TOP_CENTER);
+        mainContainer.setStyle("-fx-background-color: #F0F4F8;");
 
-            if (facilitiesData == null || facilitiesData.isEmpty()) {
-                System.err.println("No facilities data from server. Using hardcoded resources.");
-                loadHardcodedResources();
-                updateViewWithTypes();
-                return;
-            }
+        // title at the top
+        VBox titleSection = new VBox(5);
+        titleSection.setAlignment(Pos.CENTER);
 
-            parseFacilities(facilitiesData);
+        Label titleLabel = new Label("Book a Resource");
+        titleLabel.setFont(Font.font("System", FontWeight.BOLD, 28));
+        titleLabel.setStyle("-fx-text-fill: #1A2332;");
 
-            if (allResources.isEmpty()) {
-                System.err.println("No resources parsed. Using hardcoded resources.");
-                loadHardcodedResources();
-            }
+        Label subtitleLabel = new Label("Select a resource type, date and time to make a booking");
+        subtitleLabel.setFont(Font.font("System", 14));
+        subtitleLabel.setStyle("-fx-text-fill: #7A8A9E;");
 
-            updateViewWithTypes();
+        titleSection.getChildren().addAll(titleLabel, subtitleLabel);
 
-            System.out.println("Loaded " + allResources.size() + " resources from server");
-            System.out.println("Available types: " + availableResourceTypes);
+        // the white card that holds the actual form
+        mainCard = new VBox(20);
+        mainCard.setPadding(new Insets(30));
+        mainCard.setStyle(
+                "-fx-background-color: white; " +
+                        "-fx-background-radius: 16; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 20, 0, 0, 4);"
+        );
+        mainCard.setMaxWidth(750);
+        mainCard.setAlignment(Pos.TOP_CENTER);
 
-        } catch (Exception e) {
-            System.err.println("Error loading facilities: " + e.getMessage());
-            loadHardcodedResources();
-            updateViewWithTypes();
+        GridPane form = new GridPane();
+        form.setHgap(20);
+        form.setVgap(14);
+        form.setAlignment(Pos.CENTER);
+
+        int row = 0;
+
+        // resource type dropdown, disabled until controller loads the list from server
+        Label typeLabel = createLabel("Resource Type");
+        resourceTypeCombo = new ComboBox<>();
+        resourceTypeCombo.setPromptText("Select type");
+        resourceTypeCombo.setPrefWidth(220);
+        resourceTypeCombo.setDisable(true);
+        resourceTypeCombo.setStyle(
+                "-fx-background-color: #F5F7FA; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-border-color: #E2E8F0; " +
+                        "-fx-border-radius: 8; " +
+                        "-fx-padding: 4 8;"
+        );
+
+        form.add(typeLabel, 0, row);
+        form.add(resourceTypeCombo, 1, row);
+        row++;
+
+        // date field and the check availability button this is side by side
+        Label dateLabel = createLabel("Date");
+        dateField = new TextField();
+        dateField.setPromptText("yyyy-MM-dd");
+        dateField.setPrefWidth(220);
+        dateField.setStyle(
+                "-fx-background-color: #F5F7FA; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-border-color: #E2E8F0; " +
+                        "-fx-border-radius: 8; " +
+                        "-fx-padding: 4 8;"
+        );
+
+        checkAvailabilityButton = new Button("Check Availability");
+        checkAvailabilityButton.setStyle(
+                "-fx-background-color: #1A2332; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-size: 13px; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-padding: 10 24; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-cursor: hand;"
+        );
+        checkAvailabilityButton.setOnAction(e -> handleCheckAvailability());
+
+        HBox dateRow = new HBox(12, dateField, checkAvailabilityButton);
+        dateRow.setAlignment(Pos.CENTER_LEFT);
+
+        form.add(dateLabel, 0, row);
+        form.add(dateRow, 1, row);
+        row++;
+
+        // separator to visually split the form sections
+        Separator separator = new Separator();
+        separator.setPadding(new Insets(8, 0, 8, 0));
+        form.add(separator, 0, row, 2, 1);
+        row++;
+
+        // everything below here is hidden at the start, only shows up after checking availability
+        availableRoomsLabel = new Label("Available Rooms");
+        availableRoomsLabel.setFont(Font.font("System", FontWeight.BOLD, 16));
+        availableRoomsLabel.setStyle("-fx-text-fill: #1A2332;");
+        availableRoomsLabel.setVisible(false);
+        availableRoomsLabel.setManaged(false);
+        form.add(availableRoomsLabel, 0, row, 2, 1);
+        row++;
+
+        availableRoomsBox = new VBox(8);
+        availableRoomsBox.setPadding(new Insets(14));
+        availableRoomsBox.setStyle(
+                "-fx-background-color: #F8FAFC; " +
+                        "-fx-border-color: #E2E8F0; " +
+                        "-fx-border-radius: 10; " +
+                        "-fx-background-radius: 10;"
+        );
+        availableRoomsBox.setVisible(false);
+        availableRoomsBox.setManaged(false);
+        form.add(availableRoomsBox, 0, row, 2, 1);
+        row++;
+
+        // room dropdown, the label needs to be hidden too not just the combo box
+
+        roomLabel = createLabel("Select Room");
+        roomLabel.setVisible(false);
+        roomLabel.setManaged(false);
+
+        roomCombo = new ComboBox<>();
+        roomCombo.setPromptText("Choose a room");
+        roomCombo.setPrefWidth(220);
+        roomCombo.setDisable(true);
+        roomCombo.setVisible(false);
+        roomCombo.setManaged(false);
+        roomCombo.setStyle(
+                "-fx-background-color: #F5F7FA; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-border-color: #E2E8F0; " +
+                        "-fx-border-radius: 8; " +
+                        "-fx-padding: 4 8;"
+        );
+
+        form.add(roomLabel, 0, row);
+        form.add(roomCombo, 1, row);
+        row++;
+
+        // start time
+        startLabel = createLabel("Start Time");
+        startLabel.setVisible(false);
+        startLabel.setManaged(false);
+
+        startTimeField = new TextField();
+        startTimeField.setPromptText("HH:mm");
+        startTimeField.setPrefWidth(120);
+        startTimeField.setDisable(true);
+        startTimeField.setVisible(false);
+        startTimeField.setManaged(false);
+        startTimeField.setStyle(
+                "-fx-background-color: #F5F7FA; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-border-color: #E2E8F0; " +
+                        "-fx-border-radius: 8; " +
+                        "-fx-padding: 4 8;"
+        );
+
+        form.add(startLabel, 0, row);
+        form.add(startTimeField, 1, row);
+        row++;
+
+        // end time
+        endLabel = createLabel("End Time");
+        endLabel.setVisible(false);
+        endLabel.setManaged(false);
+
+        endTimeField = new TextField();
+        endTimeField.setPromptText("HH:mm");
+        endTimeField.setPrefWidth(120);
+        endTimeField.setDisable(true);
+        endTimeField.setVisible(false);
+        endTimeField.setManaged(false);
+        endTimeField.setStyle(
+                "-fx-background-color: #F5F7FA; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-border-color: #E2E8F0; " +
+                        "-fx-border-radius: 8; " +
+                        "-fx-padding: 4 8;"
+        );
+
+        form.add(endLabel, 0, row);
+        form.add(endTimeField, 1, row);
+        row++;
+
+        // confirm booking button, stays disabled until a room + valid times are picked
+        bookButton = new Button("Confirm Booking");
+        bookButton.setStyle(
+                "-fx-background-color: #2ECC71; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-size: 14px; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-padding: 12 32; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-cursor: hand;"
+        );
+        bookButton.setDisable(true);
+        bookButton.setVisible(false);
+        bookButton.setManaged(false);
+        bookButton.setOnAction(e -> handleBook());
+
+        HBox buttonRow = new HBox(bookButton);
+        buttonRow.setAlignment(Pos.CENTER);
+        buttonRow.setPadding(new Insets(8, 0, 0, 0));
+        form.add(buttonRow, 0, row, 2, 1);
+        row++;
+
+        // student id isnt shown on screen, just kept here so we can send it along with the booking
+        studentIdField = new TextField();
+        studentIdField.setEditable(false);
+        studentIdField.setVisible(false);
+
+        // status message at the bottom, used for errors, success msgs, loading text etc
+        statusLabel = new Label();
+        statusLabel.setStyle("-fx-font-size: 13px; -fx-padding: 4 0 0 0;");
+        statusLabel.setVisible(false);
+        form.add(statusLabel, 0, row, 2, 1);
+
+        mainCard.getChildren().add(form);
+
+        // confirmation card - only visible after a booking succeeds
+        confirmationCard = new VBox(18);
+        confirmationCard.setAlignment(Pos.CENTER);
+        confirmationCard.setPadding(new Insets(50));
+        confirmationCard.setStyle(
+                "-fx-background-color: white; " +
+                        "-fx-background-radius: 16; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 20, 0, 0, 4);"
+        );
+        confirmationCard.setMaxWidth(750);
+        confirmationCard.setVisible(false);
+        confirmationCard.setManaged(false);
+
+        confirmationTitle = new Label("Booking Confirmed");
+        confirmationTitle.setFont(Font.font("System", FontWeight.BOLD, 26));
+        confirmationTitle.setStyle("-fx-text-fill: #27AE60;");
+
+        confirmationRef = new Label();
+        confirmationRef.setFont(Font.font("System", FontWeight.BOLD, 16));
+        confirmationRef.setStyle("-fx-text-fill: #1A2332;");
+
+        backButton = new Button("Back");
+        backButton.setStyle(
+                "-fx-background-color: #1A2332; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-size: 13px; " +
+                        "-fx-padding: 10 32; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-cursor: hand;"
+        );
+        backButton.setOnAction(e -> handleBack());
+
+        confirmationCard.getChildren().addAll(confirmationTitle, confirmationRef, backButton);
+
+        // stack both cards on top of each other, only one is visible at a time
+        StackPane cardStack = new StackPane(mainCard, confirmationCard);
+        cardStack.setAlignment(Pos.TOP_CENTER);
+
+        mainContainer.getChildren().addAll(titleSection, cardStack);
+        scrollPane.setContent(mainContainer);
+        getChildren().add(scrollPane);
+    }
+
+    private Label createLabel(String text) {
+        Label label = new Label(text);
+        label.setFont(Font.font("System", FontWeight.BOLD, 13));
+        label.setStyle("-fx-text-fill: #2D3748;");
+        label.setAlignment(Pos.CENTER_LEFT);
+        label.setMinWidth(100);
+        return label;
+    }
+
+    public void setController(BookingController controller) {
+        this.controller = controller;
+    }
+
+    public void setStudentId(String studentId) {
+        studentIdField.setText(studentId);
+    }
+
+    // called by the controller once it fetches the resource types from the server
+    public void updateResourceTypeOptions(List<String> types) {
+        resourceTypeCombo.getItems().clear();
+        if (types != null && !types.isEmpty()) {
+            resourceTypeCombo.getItems().addAll(types);
+            resourceTypeCombo.setPromptText("Select a resource type");
+            resourceTypeCombo.setDisable(false);
+        } else {
+            resourceTypeCombo.setPromptText("No resources available");
+            resourceTypeCombo.setDisable(true);
         }
     }
 
-    private void parseFacilities(String data) {
-        allResources.clear();
-        availableResourceTypes.clear();
+    // shows the room combo, times and book button, called after check availability is clicked
+    private void showBelowCheckFields() {
+        availableRoomsLabel.setVisible(true);
+        availableRoomsLabel.setManaged(true);
+        availableRoomsBox.setVisible(true);
+        availableRoomsBox.setManaged(true);
 
-        String[] lines = data.split("\\r?\\n");
-        boolean inBookableSection = false;
+        roomLabel.setVisible(true);
+        roomLabel.setManaged(true);
+        roomCombo.setVisible(true);
+        roomCombo.setManaged(true);
 
-        for (String line : lines) {
-            line = line.trim();
-            if (line.isEmpty()) continue;
+        startLabel.setVisible(true);
+        startLabel.setManaged(true);
+        startTimeField.setVisible(true);
+        startTimeField.setManaged(true);
 
-            if (line.startsWith("[Bookable Resources]")) {
-                inBookableSection = true;
-                continue;
-            }
+        endLabel.setVisible(true);
+        endLabel.setManaged(true);
+        endTimeField.setVisible(true);
+        endTimeField.setManaged(true);
 
-            if (line.startsWith("[") && line.endsWith("]") && !line.startsWith("[Bookable Resources]")) {
-                inBookableSection = false;
-                continue;
-            }
-
-            if (line.startsWith("ROOM") || line.startsWith("---") || line.startsWith(":=")) {
-                continue;
-            }
-
-            if (inBookableSection) {
-                String[] parts = line.split("\\s*\\|\\s*");
-                if (parts.length >= 4) {
-                    String id = parts[0].trim();
-                    String type = parts[1].trim();
-                    int capacity = 0;
-                    try {
-                        capacity = Integer.parseInt(parts[2].trim());
-                    } catch (NumberFormatException e) { /* ignore */ }
-                    String building = parts[3].trim();
-
-                    if (id.matches("[A-Z0-9.\\-]+")) {
-                        String typeName = getTypeName(type);
-                        Resource resource = new Resource(id, typeName + " " + id, building, capacity);
-                        allResources.add(resource);
-
-                        String displayType = getDisplayType(id, typeName);
-                        if (!availableResourceTypes.contains(displayType)) {
-                            availableResourceTypes.add(displayType);
-                        }
-                    }
-                }
-            }
-        }
+        bookButton.setVisible(true);
+        bookButton.setManaged(true);
     }
 
-    private String getTypeName(String type) {
-        switch (type) {
-            case "discussion_room": return "Discussion Room";
-            case "group_study_room": return "Group Study Room";
-            case "computer_lab": return "Lab Workstation";
-            case "study_pod": return "Study Pod";
-            case "basketball court": return "Sports Facility";
-            default: return type.substring(0, 1).toUpperCase() + type.substring(1);
-        }
+    // hides them again, used when clearing the form after a booking is made
+    private void hideBelowCheckFields() {
+        availableRoomsLabel.setVisible(false);
+        availableRoomsLabel.setManaged(false);
+        availableRoomsBox.setVisible(false);
+        availableRoomsBox.setManaged(false);
+
+        roomLabel.setVisible(false);
+        roomLabel.setManaged(false);
+        roomCombo.setVisible(false);
+        roomCombo.setManaged(false);
+
+        startLabel.setVisible(false);
+        startLabel.setManaged(false);
+        startTimeField.setVisible(false);
+        startTimeField.setManaged(false);
+
+        endLabel.setVisible(false);
+        endLabel.setManaged(false);
+        endTimeField.setVisible(false);
+        endTimeField.setManaged(false);
+
+        bookButton.setVisible(false);
+        bookButton.setManaged(false);
     }
 
-    private String getDisplayType(String id, String typeName) {
-        if (id.startsWith("KA-")) return "Study Pod";
-        if (id.startsWith("SP-")) return "Sports Facility";
-        if (id.startsWith("C7")) return "Lab Workstation";
-        if (id.startsWith("D9")) return "Discussion Room";
-        if (id.startsWith("E9") || id.startsWith("E7")) return "Group Study Room";
-        return typeName;
-    }
+    // called by the controller with the result of the availability check
+    // it will shows a green list for fully free rooms and an orange list for rooms that have some bookings already
+    public void showAvailableRooms(List<Resource> availableRooms,
+                                   List<Resource> partiallyBookedRooms,
+                                   String date) {
 
-    private void loadHardcodedResources() {
-        allResources.clear();
-        availableResourceTypes.clear();
+        showBelowCheckFields();
 
-        allResources.addAll(List.of(
-                new Resource("KA-P1", "Study Pod KA-P1", "LIB", 2),
-                new Resource("KA-P2", "Study Pod KA-P2", "LIB", 1),
-                new Resource("SP-B1", "Basketball Court SP-B1", "OUT", 40)
-        ));
+        availableRoomsBox.getChildren().clear();
 
-        availableResourceTypes.addAll(List.of("Study Pod", "Sports Facility"));
-        System.out.println("Loaded " + allResources.size() + " hardcoded resources");
-    }
+        int totalAvailable = availableRooms.size() + partiallyBookedRooms.size();
 
-    private void updateViewWithTypes() {
-        Platform.runLater(() -> {
-            view.updateResourceTypeOptions(availableResourceTypes);
-        });
-    }
+        // no rooms for this type/date so it show a message and stop here
+        if (totalAvailable == 0) {
+            Label msg = new Label("No rooms available on " + date);
+            msg.setStyle("-fx-text-fill: #C0392B; -fx-font-weight: bold; -fx-font-size: 14px;");
+            availableRoomsBox.getChildren().add(msg);
 
-    // ================================================================
-    // DERIVE RESOURCE TYPE — SPLIT DISCUSSION AND GROUP STUDY
-    // ================================================================
+            roomCombo.setDisable(true);
+            startTimeField.setDisable(true);
+            endTimeField.setDisable(true);
+            bookButton.setDisable(true);
 
-    private String deriveType(Resource resource) {
-        String id = resource.getResourceId();
-        String name = resource.getResourceName().toLowerCase();
-
-        if (id.startsWith("KA-")) return "Study Pod";
-        if (id.startsWith("SP-")) return "Sports Facility";
-        if (id.startsWith("C7")) return "Lab Workstation";
-        if (id.startsWith("D9")) return "Discussion Room";
-        if (id.startsWith("E9") || id.startsWith("E7")) return "Group Study Room";
-        if (name.contains("discussion")) return "Discussion Room";
-        if (name.contains("group") || name.contains("study")) return "Group Study Room";
-        if (name.contains("lab") || name.contains("computer")) return "Lab Workstation";
-        if (name.contains("pod")) return "Study Pod";
-        if (name.contains("sport") || name.contains("court") || name.contains("basketball")) return "Sports Facility";
-        return "Other";
-    }
-
-    private String getBuildingForResource(String resourceId) {
-        if (resourceId.startsWith("D9")) return "D";
-        if (resourceId.startsWith("E9") || resourceId.startsWith("E7")) return "E";
-        if (resourceId.startsWith("C7")) return "LAB";
-        if (resourceId.startsWith("KA-")) return "LIB";
-        if (resourceId.startsWith("SP-")) return "OUT";
-        return null;
-    }
-
-    // ================================================================
-    // GET ROOMS BY TYPE
-    // ================================================================
-
-    private List<Resource> getRoomsByType(String type) {
-        List<Resource> result = new ArrayList<>();
-        for (Resource r : allResources) {
-            if (deriveType(r).equals(type)) {
-                result.add(r);
-            }
-        }
-        return result;
-    }
-
-    // ================================================================
-    // HANDLE CHECK AVAILABILITY
-    // ================================================================
-
-    public void handleCheckAvailability(String date, String resourceType) {
-        LocalDate localDate;
-        try {
-            localDate = LocalDate.parse(date, DATE_FORMAT);
-            if (localDate.isBefore(LocalDate.now())) {
-                Platform.runLater(() -> {
-                    view.showError("Cannot check availability for past dates.");
-                    view.setFormEnabled(true);
-                });
-                return;
-            }
-        } catch (DateTimeParseException e) {
-            Platform.runLater(() -> {
-                view.showError("Invalid date format. Use yyyy-MM-dd.");
-                view.setFormEnabled(true);
-            });
+            statusLabel.setText("No rooms available on " + date);
+            statusLabel.setStyle("-fx-text-fill: #C0392B;");
+            statusLabel.setVisible(true);
             return;
         }
 
-        final String finalDate = date;
-        final String finalResourceType = resourceType;
+        // green = fully free rooms
+        for (Resource r : availableRooms) {
+            VBox item = new VBox(2);
+            item.setPadding(new Insets(6, 12, 6, 12));
+            item.setStyle(
+                    "-fx-background-color: #E8F8E8; " +
+                            "-fx-border-radius: 8; " +
+                            "-fx-background-radius: 8;"
+            );
 
-        worker.submit(() -> {
-            try {
-                List<Resource> roomsOfType = getRoomsByType(finalResourceType);
-                List<Resource> availableRooms = new ArrayList<>();
-                List<Resource> partiallyBookedRooms = new ArrayList<>();
+            Label roomItemLabel = new Label("🟢 " + r.getResourceId() + " : " + r.getResourceName() + " (" + r.getBuilding() + ")");
+            roomItemLabel.setStyle("-fx-text-fill: #27AE60; -fx-font-weight: bold;");
+            roomItemLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
 
-                for (Resource room : roomsOfType) {
-                    String building = getBuildingForResource(room.getResourceId());
-                    if (building == null) continue;
+            Label statusText = new Label("No bookings today");
+            statusText.setStyle("-fx-text-fill: #27AE60; -fx-font-size: 11px;");
+            item.getChildren().addAll(roomItemLabel, statusText);
+            availableRoomsBox.getChildren().add(item);
+        }
 
-                    // Call MCP to check availability
-                    String result = campusService.checkAvailability(finalDate, building);
+        // orange = already has some bookings but the exact slot the user wants might still be free
+        for (Resource r : partiallyBookedRooms) {
+            VBox item = new VBox(2);
+            item.setPadding(new Insets(6, 12, 6, 12));
+            item.setStyle(
+                    "-fx-background-color: #FEF9E7; " +
+                            "-fx-border-radius: 8; " +
+                            "-fx-background-radius: 8;"
+            );
 
-                    // If room has any booking that day → ORANGE, else → GREEN
-                    if (result != null && result.contains(room.getResourceId() + ": BOOKED")) {
-                        partiallyBookedRooms.add(room);
-                    } else {
-                        availableRooms.add(room);
-                    }
-                }
+            Label roomItemLabel = new Label("🟠 " + r.getResourceId() + " : " + r.getResourceName() + " (" + r.getBuilding() + ")");
+            roomItemLabel.setStyle("-fx-text-fill: #E67E22; -fx-font-weight: bold;");
+            roomItemLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
 
-                final List<Resource> finalAvailable = availableRooms;
-                final List<Resource> finalPartiallyBooked = partiallyBookedRooms;
+            Label statusText = new Label("Some bookings exist, time may be free");
+            statusText.setStyle("-fx-text-fill: #E67E22; -fx-font-size: 11px;");
+            item.getChildren().addAll(roomItemLabel, statusText);
+            availableRoomsBox.getChildren().add(item);
+        }
 
-                Platform.runLater(() -> {
-                    if (finalAvailable.isEmpty() && finalPartiallyBooked.isEmpty()) {
-                        view.showNoRoomsAvailable(finalDate);
-                    } else {
-                        view.showAvailableRooms(finalAvailable, finalPartiallyBooked, finalDate);
-                    }
-                    view.setFormEnabled(true);
-                });
+        // fill the room dropdown with both green and orange rooms, user can pick either
+        roomCombo.getItems().clear();
+        for (Resource r : availableRooms) {
+            roomCombo.getItems().add(r.getResourceId() + " - " + r.getResourceName());
+        }
+        for (Resource r : partiallyBookedRooms) {
+            roomCombo.getItems().add(r.getResourceId() + " - " + r.getResourceName());
+        }
+        roomCombo.setDisable(false);
+        roomCombo.setPromptText("Select a room");
 
-            } catch (Exception e) {
-                Platform.runLater(() -> {
-                    view.showError("Failed to check availability: " + e.getMessage());
-                    view.setFormEnabled(true);
-                });
-            }
-        });
+        startTimeField.setDisable(false);
+        endTimeField.setDisable(false);
+        startTimeField.clear();
+        endTimeField.clear();
+
+        bookButton.setDisable(true);
+
+        statusLabel.setText(totalAvailable + " rooms available on " + date);
+        statusLabel.setStyle("-fx-text-fill: #27AE60; -fx-font-weight: bold;");
+        statusLabel.setVisible(true);
+
+        // book button only becomes clickable once a room is picked and both times look filled in
+        roomCombo.setOnAction(e -> updateBookButtonState());
+        startTimeField.setOnKeyReleased(e -> updateBookButtonState());
+        endTimeField.setOnKeyReleased(e -> updateBookButtonState());
     }
 
-    // ================================================================
-    // HANDLE BOOK RESOURCE
-    // ================================================================
 
-    public void handleBook(String studentId, String roomId, String dateStr,
-                           String startTimeStr, String endTimeStr) {
+    // just a UI convenience check not real validation . only controls whether the book button is clickable. the real validation still happens in the controller
+    private void updateBookButtonState() {
+        boolean roomSelected = roomCombo.getValue() != null;
+        String start = startTimeField.getText().trim();
+        String end = endTimeField.getText().trim();
+
+        boolean timeFilled = !start.isEmpty() && !end.isEmpty();
+
+        // check that times actually look like HH:mm before we let the user book
+        if (timeFilled) {
+            boolean validStart = start.matches("\\d{2}:\\d{2}");
+            boolean validEnd = end.matches("\\d{2}:\\d{2}");
+            if (!validStart || !validEnd) {
+                bookButton.setDisable(true);
+                return;
+            }
+        }
+
+        bookButton.setDisable(!(roomSelected && timeFilled));
+    }
+
+    public void showNoRoomsAvailable(String date) {
+        showBelowCheckFields();
+
+        availableRoomsBox.getChildren().clear();
+        Label msg = new Label("No rooms available on " + date);
+        msg.setStyle("-fx-text-fill: #C0392B; -fx-font-weight: bold; -fx-font-size: 14px;");
+        availableRoomsBox.getChildren().add(msg);
+
+        roomCombo.setDisable(true);
+        roomCombo.setPromptText("No rooms available");
+        startTimeField.setDisable(true);
+        endTimeField.setDisable(true);
+        bookButton.setDisable(true);
+
+        statusLabel.setText("No rooms available on " + date);
+        statusLabel.setStyle("-fx-text-fill: #C0392B;");
+        statusLabel.setVisible(true);
+    }
+
+    @Override
+    public void showError(String message) {
+        statusLabel.setText(message);
+        statusLabel.setStyle("-fx-text-fill: #C0392B; -fx-font-weight: bold;");
+        statusLabel.setVisible(true);
+    }
+
+    @Override
+    public void showSuccess(String message) {
+        statusLabel.setText(message);
+        statusLabel.setStyle("-fx-text-fill: #27AE60; -fx-font-weight: bold;");
+        statusLabel.setVisible(true);
+    }
+
+    public void showStatus(String message) {
+        statusLabel.setText(message);
+        statusLabel.setStyle("-fx-text-fill: #3498DB; -fx-font-weight: bold;");
+        statusLabel.setVisible(true);
+    }
+
+    // swaps the form out for the confirmation card once a booking goes through
+    public void showBookingConfirmation(String reference) {
+        // instead of just disabling the form, swap it out completely for the confirmation card
+        // so the user cant poke at the old fields while looking at the confirmation
+        confirmationRef.setText("Reference: " + reference);
+
+        mainCard.setVisible(false);
+        mainCard.setManaged(false);
+
+        confirmationCard.setVisible(true);
+        confirmationCard.setManaged(true);
+    }
+
+    // runs when the user clicks Back after a successful booking, resets everything for a new booking
+    private void handleBack() {
+        confirmationCard.setVisible(false);
+        confirmationCard.setManaged(false);
+
+        mainCard.setVisible(true);
+        mainCard.setManaged(true);
+
+        clearFields();
+        setFormEnabled(true);
+    }
+
+    // locks the whole form while a request is running so the user cant spam click stuff
+    public void setFormEnabled(boolean enabled) {
+        resourceTypeCombo.setDisable(!enabled);
+        dateField.setDisable(!enabled);
+        checkAvailabilityButton.setDisable(!enabled);
+        roomCombo.setDisable(!enabled || roomCombo.getItems().isEmpty());
+        startTimeField.setDisable(!enabled);
+        endTimeField.setDisable(!enabled);
+        bookButton.setDisable(!enabled);
+    }
+
+    public void clearFields() {
+        dateField.clear();
+        roomCombo.setValue(null);
+        roomCombo.getItems().clear();
+        startTimeField.clear();
+        endTimeField.clear();
+
+        hideBelowCheckFields();
+
+        statusLabel.setText("");
+        statusLabel.setVisible(false);
+    }
+
+    public String getSelectedResourceType() {
+        return resourceTypeCombo.getValue();
+    }
+
+    public String getDate() {
+        return dateField.getText().trim();
+    }
+
+    public String getSelectedRoomId() {
+        // the combo box shows "id - name" so we just grab whatever is before the dash
+        String selected = roomCombo.getValue();
+        if (selected == null || selected.isEmpty()) return null;
+        String[] parts = selected.split(" - ");
+        if (parts.length > 0) return parts[0].trim();
+        return null;
+    }
+
+    public String getStartTime() {
+        return startTimeField.getText().trim();
+    }
+
+    public String getEndTime() {
+        return endTimeField.getText().trim();
+    }
+
+    public String getStudentId() {
+        return studentIdField.getText().trim();
+    }
+
+    // called when the check availability button gets pressed
+    // does simple field checks here for instant feedback, then hands off to the controller
+    // for the actual server call
+    private void handleCheckAvailability() {
+        if (controller == null) {
+            showError("Controller not connected.");
+            return;
+        }
+
+        String resourceType = getSelectedResourceType();
+        String date = getDate();
+
+        if (resourceType == null || resourceType.isEmpty()) {
+            showError("Please select a resource type.");
+            return;
+        }
+
+        if (date.isEmpty()) {
+            showError("Please enter a date.");
+            return;
+        }
+
+        if (!date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            showError("Invalid date format. Use yyyy-MM-dd.");
+            return;
+        }
+
+        setFormEnabled(false);
+        showStatus("Checking availability...");
+
+        controller.handleCheckAvailability(date, resourceType);
+    }
+
+    // called when confirm booking gets pressed , checks  validation and the actual booking call happens in the controller
+    private void handleBook() {
+        if (controller == null) {
+            showError("Controller not connected.");
+            return;
+        }
+
+        String studentId = getStudentId();
+        String roomId = getSelectedRoomId();
+        String date = getDate();
+        String startTime = getStartTime();
+        String endTime = getEndTime();
 
         if (studentId == null || studentId.isEmpty()) {
-            Platform.runLater(() -> {
-                view.showError("Please log in first.");
-                view.setFormEnabled(true);
-            });
+            showError("Please log in first.");
             return;
         }
 
         if (roomId == null || roomId.isEmpty()) {
-            Platform.runLater(() -> {
-                view.showError("Please select a room.");
-                view.setFormEnabled(true);
-            });
+            showError("Please select a room.");
             return;
         }
 
-        if (startTimeStr == null || startTimeStr.isEmpty()) {
-            Platform.runLater(() -> {
-                view.showError("Please enter a start time.");
-                view.setFormEnabled(true);
-            });
+        if (startTime.isEmpty()) {
+            showError("Please enter a start time.");
             return;
         }
 
-        if (endTimeStr == null || endTimeStr.isEmpty()) {
-            Platform.runLater(() -> {
-                view.showError("Please enter an end time.");
-                view.setFormEnabled(true);
-            });
+        if (endTime.isEmpty()) {
+            showError("Please enter an end time.");
             return;
         }
 
-        LocalDate date;
-        try {
-            date = LocalDate.parse(dateStr, DATE_FORMAT);
-            if (date.isBefore(LocalDate.now())) {
-                Platform.runLater(() -> {
-                    view.showError("Cannot book a past date.");
-                    view.setFormEnabled(true);
-                });
-                return;
-            }
-        } catch (DateTimeParseException e) {
-            Platform.runLater(() -> {
-                view.showError("Invalid date format. Use yyyy-MM-dd.");
-                view.setFormEnabled(true);
-            });
+        if (!startTime.matches("\\d{2}:\\d{2}")) {
+            showError("Invalid start time format. Use HH:mm.");
             return;
         }
 
-        LocalTime startTime;
-        try {
-            startTime = LocalTime.parse(startTimeStr);
-        } catch (DateTimeParseException e) {
-            Platform.runLater(() -> {
-                view.showError("Invalid start time format. Use HH:mm.");
-                view.setFormEnabled(true);
-            });
+        if (!endTime.matches("\\d{2}:\\d{2}")) {
+            showError("Invalid end time format. Use HH:mm.");
             return;
         }
 
-        LocalTime endTime;
-        try {
-            endTime = LocalTime.parse(endTimeStr);
-        } catch (DateTimeParseException e) {
-            Platform.runLater(() -> {
-                view.showError("Invalid end time format. Use HH:mm.");
-                view.setFormEnabled(true);
-            });
-            return;
-        }
+        setFormEnabled(false);
+        showStatus("Booking...");
 
-        if (!endTime.isAfter(startTime)) {
-            Platform.runLater(() -> {
-                view.showError("End time must be after start time.");
-                view.setFormEnabled(true);
-            });
-            return;
-        }
-
-        // ─── SPORTS FACILITY 1-HOUR RULE ──────────────────────────────
-        if (roomId.startsWith("SP-")) {
-            long minutes = Duration.between(startTime, endTime).toMinutes();
-            if (minutes != 60) {
-                Platform.runLater(() -> {
-                    view.showError("Sports facilities must be booked in 1-hour blocks (e.g., 10:00-11:00).");
-                    view.setFormEnabled(true);
-                });
-                return;
-            }
-        }
-
-        // ─── OPERATING HOURS ───────────────────────────────────────────
-        String building = getBuildingForResource(roomId);
-        if (building != null) {
-            String[] hours = OPERATING_HOURS.get(building);
-            if (hours != null) {
-                LocalTime open = LocalTime.parse(hours[0]);
-                LocalTime close = LocalTime.parse(hours[1]);
-                if (startTime.isBefore(open) || endTime.isAfter(close)) {
-                    Platform.runLater(() -> {
-                        view.showError("Booking must be between " + open + " and " + close + ".");
-                        view.setFormEnabled(true);
-                    });
-                    return;
-                }
-            }
-        }
-
-        // ─── DUPLICATE CHECK ───────────────────────────────────────────
-        if (isDuplicateBooking(studentId, roomId, date, startTime, endTime)) {
-            Platform.runLater(() -> {
-                view.showError("You already have a booking for this room at this time.");
-                view.setFormEnabled(true);
-            });
-            return;
-        }
-
-        final LocalDate finalDate = date;
-        final LocalTime finalStart = startTime;
-        final LocalTime finalEnd = endTime;
-        final String finalRoomId = roomId;
-        final String finalStudentId = studentId;
-
-        worker.submit(() -> {
-            try {
-                Booking booking = campusService.bookResource(
-                        finalStudentId, finalRoomId, finalDate, finalStart, finalEnd
-                );
-
-                Platform.runLater(() -> {
-                    view.showBookingConfirmation(booking.getBookingRef());
-                    view.setFormEnabled(true);
-                });
-
-            } catch (Exception e) {
-                Platform.runLater(() -> {
-                    view.showError("Failed to book: " + e.getMessage());
-                    view.setFormEnabled(true);
-                });
-            }
-        });
+        controller.handleBook(studentId, roomId, date, startTime, endTime);
     }
 
-    // ================================================================
-    // DUPLICATE CHECK (LOCAL FILE ONLY)
-    // ================================================================
+    @Override
+    public void onShow() {}
 
-    private boolean isDuplicateBooking(String studentId, String roomId,
-                                       LocalDate date, LocalTime start, LocalTime end) {
-        List<Booking> userBookings = campusService.getUserBookings(studentId);
-        for (Booking b : userBookings) {
-            if (b.getResourceId().equals(roomId)
-                    && b.getDate().equals(date)
-                    && b.getStatus() == STATUS_ACTIVE) {
-                boolean overlaps = start.isBefore(b.getEndTime()) && end.isAfter(b.getStartTime());
-                if (overlaps) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    // ================================================================
-    // SHUTDOWN
-    // ================================================================
-
-    public void shutdown() {
-        worker.shutdownNow();
-    }
+    @Override
+    public void onHide() {}
 }
