@@ -9,20 +9,16 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Handles everything on the Booking History screen.
- * Shows past and upcoming bookings based on status and date.
- *
- * STATUS (BEFORE CHANGE): 0 = Active, 1 = Cancelled
- */
+/* This is a controller for the booking history screen that load and display the bookings made by the user by seprating
+   them in to past and present based on the date and status, and handle cancel booking action
+*/
 public class ViewBookingController {
 
     private final ViewBookingView view;
     private final CampusService campusService;
     private String currentStudentId = "";
 
-    // ===== STATUS CONSTANTS (BEFORE CHANGE) =====
-    // 0 = Active, 1 = Cancelled
+    // Same as the booking status mentioned in other classes where 0 = Active booking, 1 = Cancelled booking
     private static final int STATUS_ACTIVE = 0;
     private static final int STATUS_CANCELLED = 1;
 
@@ -36,6 +32,9 @@ public class ViewBookingController {
         this.currentStudentId = studentId;
     }
 
+    /* This method is load the bookings of a specific user using the student and filters the user bookings into past and upcoming,
+       then updates the view.
+     */
     public void loadBookings() {
         if (currentStudentId == null || currentStudentId.isEmpty()) {
             view.showError("No student logged in.");
@@ -58,11 +57,9 @@ public class ViewBookingController {
         view.displayBookings(upcomingBookings, pastBookings);
     }
 
-    /**
-     * PREVIOUS: status = 0 means ACTIVE, status = 1 means CANCELLED
-     */
+    // This method is used to determine whether the booking is categorized as past
     private boolean isPastBooking(Booking booking) {
-        // ===== If cancelled (status = 1), it's always past =====
+        // If the booking status = 1 (cancelled), it will be always categorized as past
         if (booking.getStatus() == STATUS_CANCELLED) {
             return true;
         }
@@ -70,7 +67,7 @@ public class ViewBookingController {
         LocalDate today = LocalDate.now();
         LocalTime now = LocalTime.now();
 
-        // ===== If active (status = 0), check if date has passed =====
+        // If the booking status = 0 (active), then determine if the booking is past by checking if date has passed
         if (booking.getDate().isBefore(today)) {
             return true;
         }
@@ -83,6 +80,7 @@ public class ViewBookingController {
         return false;
     }
 
+    // Cancel the active booking that is not categorized as past with booking reference number
     public void handleCancelBooking(String bookingRef) {
         if (bookingRef == null || bookingRef.isEmpty()) {
             view.showError("No booking selected to cancel.");
@@ -103,7 +101,6 @@ public class ViewBookingController {
             return;
         }
 
-        // ===== Check if booking is already cancelled =====
         if (targetBooking.getStatus() == STATUS_CANCELLED) {
             view.showError("This booking has already been cancelled.");
             return;
@@ -114,12 +111,10 @@ public class ViewBookingController {
             return;
         }
 
-        // ===== PREVIOUS: Sets status to 1 (CANCELLED) =====
         campusService.cancelBooking(bookingRef);
         view.showSuccess("Booking " + bookingRef + " has been cancelled.");
 
         loadBookings();
     }
-
 
 }
