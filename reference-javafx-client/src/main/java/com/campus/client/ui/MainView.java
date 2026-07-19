@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 public class MainView extends BorderPane {
 
@@ -68,8 +67,7 @@ public class MainView extends BorderPane {
     private FAQController faqController;
 
 
-    // Background Thread
-    private Thread workerThread;
+
     // status label for logging
     private Label statusLabel;
 
@@ -470,6 +468,7 @@ public class MainView extends BorderPane {
             faqController = new FAQController(rag, faqView);
             faqView.setController(faqController);
         } else {
+            System.out.println("No rag ");
         }
     }
 
