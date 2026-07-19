@@ -42,17 +42,13 @@ public class MainView extends BorderPane {
     private Circle mcpStatusIndicator;
     private Label mcpStatusLabel;
     private Label userInfoLabel;
-
     private Button homeBtn;
     private Button bookingBtn;
     private Button historyBtn;
     private Button policyBtn;
     private Button logoutBtn;
 
-    // ================================================================
-    // VIEWS (Content areas)
-    // ================================================================
-
+    // Multiple content views
     private LoginView loginView;
     private VBox homeContent;
     private String currentStudentId = "";
@@ -66,60 +62,41 @@ public class MainView extends BorderPane {
     private FAQView faqView;
     private VBox availabilityPlaceholder;
 
-    // ================================================================
-    // MCP/RAG REFERENCES
-    // ================================================================
-
+    // MCP and Rag references
     private CampusMcpClient mcp;
     private RagService rag;
     private FAQController faqController;
 
-    // ================================================================
-    // BACKGROUND THREAD
-    // ================================================================
 
+    // Background Thread
     private Thread workerThread;
-
-    // ================================================================
-    // STATUS LABEL
-    // ================================================================
-
+    // status label for logging
     private Label statusLabel;
 
-    // ================================================================
-    // DATA STORAGE
-    // ================================================================
 
     private DataStorage dataStorage;
     private LoginController loginController;
 
-    // ================================================================
-    // CONSTRUCTOR
-    // ================================================================
-
+    // Constructor for MainView
     public MainView() {
         initDataStorage();
-
         buildNavbar();
         buildLoginView();
         buildHomeContent();
-        buildBookingViews();          // ← Only creates views, NO CampusService
-        buildFAQView();               // ← Only creates faqView, NO controller yet
+        buildBookingViews();
+        buildFAQView();
         buildPlaceholders();
         buildStatusLabel();
 
         setTop(navbar);
         showLogin();
 
-        System.out.println("DEBUG: FAQView is " + (faqView == null ? "NULL" : "CREATED"));
-        System.out.println("DEBUG: RAG is " + (rag == null ? "NULL" : "NOT NULL"));
     }
 
+    // Locates the data directory related to the project root
     private static File findDataDir() {
         try {
             File classesDir = new File(MainView.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            // classesDir is .../reference-javafx-client/target/classes
-            // go up twice: out of classes, out of target, landing on reference-javafx-client
             File moduleRoot = classesDir.getParentFile().getParentFile();
             return new File(moduleRoot, "data");
         } catch (Exception e) {
@@ -127,10 +104,8 @@ public class MainView extends BorderPane {
             return new File("data"); // last resort fallback
         }
     }
-    // ================================================================
-    // INIT DATA STORAGE
-    // ================================================================
 
+    // Initialize the data storage with the correct file path
     private void initDataStorage() {
         File dataDir = findDataDir();
         File userDataFile = new File(dataDir, "userData.txt");
@@ -146,14 +121,12 @@ public class MainView extends BorderPane {
         }
     }
 
-    // ================================================================
-    // LOGIN CALLBACK
-    // ================================================================
-
+    /* Creates a callback that is invoked when the login is successful, so that it can store the student id,
+       updates the history controller, and switches to the Home view.
+    */
     private Consumer<String> createLoginCallback() {
         return studentId -> {
             currentStudentId = studentId;
-            System.out.println("Login successful for: " + studentId);
             if (viewBookingController != null) {
                 viewBookingController.setStudentId(studentId);
             }
@@ -163,10 +136,8 @@ public class MainView extends BorderPane {
         };
     }
 
-    // ================================================================
-    // NAVBAR BUILDER
-    // ================================================================
 
+    // Builds the navigation bar
     private void buildNavbar() {
         navbar = new HBox(10);
         navbar.setPadding(new Insets(8, 15, 8, 15));
@@ -217,6 +188,7 @@ public class MainView extends BorderPane {
         );
     }
 
+    // Create multiple navigation button with hover effect
     private Button createNavButton(String text) {
         Button btn = new Button(text);
         btn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
@@ -251,6 +223,7 @@ public class MainView extends BorderPane {
         return btn;
     }
 
+    // Creates a log out button with hover effect
     private Button createHomeLogoutButton(String text) {
         Button btn = new Button(text);
         btn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
@@ -284,30 +257,20 @@ public class MainView extends BorderPane {
         return btn;
     }
 
-    // ================================================================
-    // STATUS LABEL
-    // ================================================================
-
     private void buildStatusLabel() {
         statusLabel = new Label();
         statusLabel.setVisible(false);
         this.getChildren().add(statusLabel);
     }
 
-    public void setStatus(String message) {
-        Platform.runLater(() -> userInfoLabel.setText(message));
-    }
 
-    // ================================================================
-    // VIEW BUILDERS
-    // ================================================================
 
+    // builds the login screen
     private void buildLoginView() {
         loginView = new LoginView();
     }
 
-    // ---------- HOME CONTENT ----------
-
+    // builds the home screen with welcome message and resource cards
     private void buildHomeContent() {
         homeContent = new VBox(20);
         homeContent.setAlignment(Pos.TOP_CENTER);
@@ -319,6 +282,7 @@ public class MainView extends BorderPane {
         headerRow.setAlignment(Pos.CENTER_LEFT);
         headerRow.setId("headerRow");
 
+        // circle with logo
         StackPane logoCircle = new StackPane();
         logoCircle.setPrefSize(70, 70);
         logoCircle.setMaxSize(70, 70);
@@ -329,6 +293,7 @@ public class MainView extends BorderPane {
         logoLabel.setId("logo");
         logoCircle.getChildren().add(logoLabel);
 
+        // welcome text
         VBox textBlock = new VBox(5);
         textBlock.setAlignment(Pos.CENTER_LEFT);
 
@@ -346,20 +311,24 @@ public class MainView extends BorderPane {
         textBlock.getChildren().addAll(welcomeLabel, subtitleLabel);
         headerRow.getChildren().addAll(logoCircle, textBlock);
 
+        // row of cards showing each resource type
         HBox cardsRow = new HBox(25);
         cardsRow.setAlignment(Pos.CENTER);
         cardsRow.setId("cardsRow");
         cardsRow.setPadding(new Insets(20, 0, 0, 0));
 
+        // only show cards if campusService has loaded resources
         if (campusService != null) {
             List<Resource> resources = campusService.getAllResources();
             if (!resources.isEmpty()) {
+                // group resources by type so we can show one card per type
                 Map<String, List<Resource>> grouped = new HashMap<>();
                 for (Resource r : resources) {
                     String type = r.getTypeName();
                     grouped.computeIfAbsent(type, k -> new ArrayList<>()).add(r);
                 }
 
+                // show cards in this specific order
                 String[] typeOrder = {"Discussion Room", "Group Study Room", "Study Pod", "Lab Workstation", "Basketball Court"};
                 for (String typeName : typeOrder) {
                     List<Resource> rooms = grouped.get(typeName);
@@ -392,6 +361,7 @@ public class MainView extends BorderPane {
         homeContent.getChildren().addAll(spacer, headerRow, cardsWrapper);
     }
 
+    // creates a card showing resource info
     private VBox createInfoCard(String name, String rooms, String capacity, String building, String hours) {
         VBox card = new VBox(6);
         card.setAlignment(Pos.CENTER);
@@ -407,14 +377,14 @@ public class MainView extends BorderPane {
         card.setPrefWidth(190);
         card.setPrefHeight(270);
 
-        // ❌ REMOVED: onMouseEntered and onMouseExited
-
+        // icon
         Label iconLabel = new Label(name.substring(0, 1));
         iconLabel.setFont(Font.font("System", FontWeight.BOLD, 36));
         iconLabel.setStyle("-fx-text-fill: #2C3E50;");
         iconLabel.setMaxWidth(Double.MAX_VALUE);
         iconLabel.setAlignment(Pos.CENTER);
 
+        // resource type name
         Label nameLabel = new Label(name);
         nameLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
         nameLabel.setStyle("-fx-text-fill: #2C3E50;");
@@ -423,12 +393,14 @@ public class MainView extends BorderPane {
         nameLabel.setAlignment(Pos.CENTER);
         nameLabel.setMaxWidth(160);
 
+        // decorative line
         Label separator = new Label("─");
         separator.setStyle("-fx-text-fill: #D5D8DC;");
         separator.setFont(Font.font("System", 12));
         separator.setMaxWidth(Double.MAX_VALUE);
         separator.setAlignment(Pos.CENTER);
 
+        // room ids list
         Label roomLabel = new Label(rooms);
         roomLabel.setFont(Font.font("System", 11));
         roomLabel.setStyle("-fx-text-fill: #5D6D7E;");
@@ -437,24 +409,28 @@ public class MainView extends BorderPane {
         roomLabel.setAlignment(Pos.CENTER);
         roomLabel.setMaxWidth(160);
 
+        // capacity info
         Label capacityLabel = new Label(capacity);
         capacityLabel.setFont(Font.font("System", 11));
         capacityLabel.setStyle("-fx-text-fill: #5D6D7E;");
         capacityLabel.setMaxWidth(Double.MAX_VALUE);
         capacityLabel.setAlignment(Pos.CENTER);
 
+        // building info
         Label buildingLabel = new Label(building);
         buildingLabel.setFont(Font.font("System", 11));
         buildingLabel.setStyle("-fx-text-fill: #5D6D7E;");
         buildingLabel.setMaxWidth(Double.MAX_VALUE);
         buildingLabel.setAlignment(Pos.CENTER);
 
+        // opening hours in green
         Label hoursLabel = new Label(hours);
         hoursLabel.setFont(Font.font("System", 11));
         hoursLabel.setStyle("-fx-text-fill: #27AE60; -fx-font-weight: bold;");
         hoursLabel.setMaxWidth(Double.MAX_VALUE);
         hoursLabel.setAlignment(Pos.CENTER);
 
+        // some resources are not bookable due to mcp server limitations, this is also the bug of mcp server when we doing
         boolean showUnavailable = !name.equals("Study Pod") && !name.equals("Basketball Court");
         Label unavailableLabel = new Label("     Currently unavailable\ndue to MCP server limitation");
         unavailableLabel.setFont(Font.font("System", 8));
@@ -477,33 +453,27 @@ public class MainView extends BorderPane {
         return card;
     }
 
-    // ---------- BOOKING VIEWS ----------
-    // ✅ FIXED: Only create the Views, no CampusService
+    // creates the booking views
     private void buildBookingViews() {
         bookingView = new BookingView();
         viewBookingView = new ViewBookingView();
-        // CampusService, LoginController, etc. will be created in bind() with real MCP
     }
 
-    // ---------- FAQ VIEW ----------
-    // ✅ FIXED: Only create the View, no controller yet
+    // creates the faq view
     private void buildFAQView() {
         faqView = new FAQView();
-        // FAQController will be created in rebuildFAQView() when RAG is available
     }
 
-    // ✅ NEW: Method to create FAQController when rag is available
+    // creates the faq controller when rag is available
     private void rebuildFAQView() {
         if (rag != null && faqView != null) {
             faqController = new FAQController(rag, faqView);
             faqView.setController(faqController);
-            System.out.println("FAQController created and connected to FAQView");
         } else {
-            System.out.println("RAG service not available - FAQ will show error");
         }
     }
 
-    // ---------- PLACEHOLDERS ----------
+    // placeholder for features that are not implemented yet
     private void buildPlaceholders() {
         availabilityPlaceholder = createPlaceholder("Resource Availability");
     }
@@ -520,10 +490,7 @@ public class MainView extends BorderPane {
         return box;
     }
 
-    // ================================================================
-    // NAVIGATION METHODS
-    // ================================================================
-
+    // navigation methods
     public void showLogin() {
         setCenter(loginView);
         loginView.onShow();
@@ -558,23 +525,16 @@ public class MainView extends BorderPane {
     }
 
     public void showPolicy() {
-        System.out.println("showPolicy() called");
-        System.out.println("faqView: " + (faqView == null ? "NULL" : "NOT NULL"));
-        System.out.println("faqController: " + (faqController == null ? "NULL" : "NOT NULL"));
         if (faqView != null && faqController != null) {
             setCenter(faqView.getRoot());
             faqView.onShow();
             System.out.println("FAQView displayed");
         } else {
-            System.out.println("faqView or faqController is NULL - showing placeholder");
             setCenter(createPlaceholder("Policy Assistant"));
         }
     }
 
-    // ================================================================
-    // LOGOUT
-    // ================================================================
-
+    // handles logout with confirmation dialog
     private void handleLogout() {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Logout");
@@ -591,10 +551,7 @@ public class MainView extends BorderPane {
         });
     }
 
-    // ================================================================
-    // HELPER METHODS
-    // ================================================================
-
+    // helper methods for showing and hiding navbar buttons
     public void showAllNavButtons() {
         homeBtn.setVisible(true);
         bookingBtn.setVisible(true);
@@ -624,17 +581,13 @@ public class MainView extends BorderPane {
 
     public LoginView getLoginView() { return loginView; }
 
-    // ================================================================
-    // MCP BINDING
-    // ================================================================
-
+    // binds the mcp client and rag service to the views and creates all controllers
     public void bind(CampusMcpClient mcp, RagService rag) {
-        // Quick test call
+        // quick test call to check if server is responding
         if (mcp != null) {
             new Thread(() -> {
                 try {
                     String result = mcp.callTool("check_room_availability", Map.of("date", "2026-07-25"));
-                    System.out.println("DEBUG SERVER RESPONSE:\n" + result);
                 } catch (Exception e) { e.printStackTrace(); }
             }).start();
         }
@@ -643,15 +596,12 @@ public class MainView extends BorderPane {
         this.rag = rag;
         updateMCPStatus(mcp != null);
 
-        // ✅ FIX: Rebuild FAQController now that rag is available
         rebuildFAQView();
 
         if (mcp != null && bookingView != null && viewBookingView != null) {
-            // ✅ Create REAL CampusService with connected MCP
             campusService = new CampusService(mcp, dataStorage);
             campusService.loadResources();
 
-            // ✅ Create LoginController with real service
             loginController = new LoginController(
                     loginView,
                     campusService,
@@ -661,7 +611,7 @@ public class MainView extends BorderPane {
             bookingController = new BookingController(bookingView, campusService);
             setBookingController(bookingController);
 
-            // Rebuild home content with real data
+            // rebuild home content with real resource data now that we have campusService
             buildHomeContent();
 
             viewBookingController = new ViewBookingController(viewBookingView, campusService);
@@ -670,17 +620,11 @@ public class MainView extends BorderPane {
             if (!currentStudentId.isEmpty()) {
                 viewBookingController.setStudentId(currentStudentId);
             }
-            System.out.println("Booking screens rebuilt with a real connected MCP client");
         }
     }
 
-    public CampusMcpClient getMcp() { return mcp; }
-    public RagService getRag() { return rag; }
 
-    // ================================================================
-    // REFRESH DISCOVERY
-    // ================================================================
-
+    // lists all available mcp tools
     public void refreshDiscovery() {
         if (mcp == null) return;
         if (workerThread != null && workerThread.isAlive()) workerThread.interrupt();
@@ -699,11 +643,6 @@ public class MainView extends BorderPane {
         workerThread.start();
     }
 
-    // ================================================================
-    // getRoot() & setBookingController
-    // ================================================================
-
-    public BorderPane getRoot() { return this; }
 
     public void setBookingController(BookingController controller) {
         this.bookingController = controller;

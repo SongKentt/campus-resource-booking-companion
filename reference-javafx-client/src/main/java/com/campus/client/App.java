@@ -59,7 +59,6 @@ public final class App extends Application {
             // tell the user we connecting
             Platform.runLater(() -> {
                 view.setStatusMessage("Connecting to MCP server at " + url + " …");
-                System.out.println("Connecting to MCP server at " + url);
             });
 
             // connect to the mcp server
@@ -83,7 +82,6 @@ public final class App extends Application {
             Platform.runLater(() -> {
                 view.bind(mcp, ragFinal);
                 view.setStatusMessage("Connected to '" + init.serverInfo().name() + "'.  " + llmNote);
-                view.refreshDiscovery();
             });
 
         } catch (Exception e) {
@@ -110,25 +108,19 @@ public final class App extends Application {
         provider = provider.toLowerCase();
         int maxTokens = 1024;
 
-        switch (provider) {
-            case "anthropic" -> {
-                // try to get the api key
-                String key = firstNonBlank(System.getProperty("anthropic.apiKey"),
-                        System.getenv("ANTHROPIC_API_KEY"), null);
+        if (provider.equals("anthropic")) {// try to get the api key
+            String key = firstNonBlank(System.getProperty("anthropic.apiKey"),
+                    System.getenv("ANTHROPIC_API_KEY"), null);
 
-                // no key means no llm
-                if (key == null) return null;
+            // no key means no llm
+            if (key == null) return null;
 
-                // use default model or what the user specified
-                String model = firstNonBlank(System.getProperty("anthropic.model"), DEFAULT_ANTHROPIC_MODEL);
-                return new AnthropicClient(key, model, maxTokens);
-            }
-
-            default -> {
-                log.warn("Unknown LLM_PROVIDER '{}'; RAG tab disabled.", provider);
-                return null;
-            }
+            // use default model or what the user specified
+            String model = firstNonBlank(System.getProperty("anthropic.model"), DEFAULT_ANTHROPIC_MODEL);
+            return new AnthropicClient(key, model, maxTokens);
         }
+        log.warn("Unknown LLM_PROVIDER '{}'; RAG tab disabled.", provider);
+        return null;
     }
 
     // helper that returns the first non-empty string from a list of values

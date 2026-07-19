@@ -89,7 +89,4 @@ public class FAQController {
     }
 
 
-    public void shutdown() {
-        worker.shutdownNow();
-    }
 }
