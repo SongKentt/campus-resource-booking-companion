@@ -9,14 +9,20 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 
 public class DataStorage {
+    // File path for a local file that store the student data
     private final String userDataFilePath;
+    // File path for a local file that store the booking record
     private final String bookingRecordFilePath;
 
+    // Constructor to create a DataStorage instance
     public DataStorage(String userDataFilePath, String bookingHistoryFilePath) {
         this.userDataFilePath = userDataFilePath;
         this.bookingRecordFilePath = bookingHistoryFilePath;
     }
 
+    /* Read the local file that store the user data line by line, create student object, add them to a list and
+        return the list. An empty list is returned if file doesn't exist.
+     */
     public ArrayList<Student> loadStudents() {
         ArrayList<Student> studentsList = new ArrayList<>();
         Path path = Paths.get(userDataFilePath);
@@ -43,6 +49,9 @@ public class DataStorage {
         return studentsList;
     }
 
+    /* Read the local file that store booking records line by line, create booking objects and add them into a list, then return the list.
+       An empty list is returned if file doesn't exist.
+     */
     public ArrayList<Booking> loadBookings() {
         ArrayList<Booking> bookingRecordList = new ArrayList<>();
         Path path = Paths.get(bookingRecordFilePath);
@@ -73,6 +82,7 @@ public class DataStorage {
         return bookingRecordList;
     }
 
+    // Accept a booking object as parameter, convert it into a string, and write it into a local booking record file
     public void saveBooking(Booking booking) {
         Path path = Paths.get(bookingRecordFilePath);
 
@@ -82,6 +92,7 @@ public class DataStorage {
                 booking.getStatus());
 
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(bookingRecordFilePath, true))) {
+            // if the file is empty, write a header
             if (Files.size(path) == 0){
                 bw.write("# bookingRef | resourceId | date | start | end | studentId | status");
                 bw.newLine();
@@ -94,9 +105,13 @@ public class DataStorage {
         }
     }
 
+    /*  Accept the booking Reference number and new status as parameter, update the status of the booking with the
+        corresponding booking reference number, then rewrite the local booking record file
+    */
     public void updateBookingStatus(String bookingRef, int newStatus) {
         ArrayList<Booking> allBookingRecord = loadBookings();
         boolean bookingRecordExist = false;
+
 
         for (Booking bookingRecord : allBookingRecord) {
             if (bookingRecord.getBookingRef().equals(bookingRef)) {
