@@ -1,45 +1,36 @@
 package com.campus.client.controller;
 
-import com.campus.client.model.Student;
 import com.campus.client.service.CampusService;
 import com.campus.client.ui.LoginView;
 import javafx.application.Platform;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
-/**
- * Handles the Login button's onClick event (FR1).
- */
+
 public class LoginController {
 
     private final LoginView view;
     private final CampusService service;
-    private final Runnable onLoginSuccess;
+    private final Consumer<String> onLoginSuccess; // callback to pass the student id
 
-    // Background thread
-    private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "login-worker");
-        t.setDaemon(true);
-        return t;
-    });
-    // Constructor
-    public LoginController(LoginView view, CampusService service, Runnable onLoginSuccess) {
+    public LoginController(LoginView view, CampusService service, Consumer<String> onLoginSuccess) {
         this.view = view;
         this.service = service;
         this.onLoginSuccess = onLoginSuccess;
-        this.view.setLoginAction(this::handleLogin);
+        this.view.setController(this);
     }
-    // Main logics
+
+    /* Method that is called when the login button was clicked by the user and perform validation on the login fields
+       input then update the UI
+     */
     public void handleLogin() {
-        // Clear old errors
         view.clearFieldErrors();
 
-        // Get input
+        // Received input from the view
         String studentId = view.getStudentId();
         String password = view.getPassword();
 
-        // Validate input
+        // First check if the input is totally empty or not, assume it is not empty
         boolean valid = true;
         if (studentId.isEmpty()) {
             view.showStudentIdError("Please enter a valid Student ID");
@@ -53,32 +44,37 @@ public class LoginController {
             return;
         }
 
-        // disable button
+        // Disable the button to prevent the user to double-click it
         view.setLoginButtonDisabled(true);
 
-        // background thread
-        worker.submit(() -> {
+        // A background Thread is created
+        Thread loginValidationThread = new Thread(() -> {
             try {
-                // authenticate
+                // Call the campus service method to validate the student id and password entered
                 boolean isValid = service.validateStudent(studentId, password);
 
-                // update UI on main thread
+                // UI update done by the UI thread
                 Platform.runLater(() -> {
                     view.setLoginButtonDisabled(false);
                     if (isValid) {
                         view.clearFields();
-                        onLoginSuccess.run();
+                        // Send the Student ID back to MainView
+                        onLoginSuccess.accept(studentId);
                     } else {
                         view.showPasswordError("Invalid Student ID or password.");
                     }
                 });
+
             } catch (Exception ex) {
-                // Handle errors
+                // UI update done by the UI thread if there is any error
                 Platform.runLater(() -> {
                     view.setLoginButtonDisabled(false);
-                    view.showError("Could not reach the server. Please try again.\n(" + ex.getMessage() + ")");
+                    view.showError("Could not reach the server. Please try again.\n");
                 });
             }
         });
+
+        // Execute the background thread
+        loginValidationThread.start();
     }
 }
