@@ -9,62 +9,41 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Controller for the Policy Assistant (FAQ) screen.
- *
- * <p>This class receives the student's question from FAQView, calls RagService
- *  * in a background thread, and sends the result back to the view for display.</p>
- */
+
 public class FAQController {
 
     private final RagService ragService;
     private final FAQView view;
 
-    /**
-     * Background worker used for MCP and LLM calls.
-     * These calls should not run on the JavaFX Application Thread.
-     */
+
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "rag-worker");
         t.setDaemon(true);
         return t;
     });
 
-    /**
-     * Creates a controller for the FAQ / Policy Assistant screen
-     *
-     * @param ragService service that runs the RAG pipeline
-     * @param view       FAQ view controlled by this controller
-     */
+
     public FAQController(RagService ragService, FAQView view) {
         this.ragService = ragService;
         this.view = view;
     }
 
-    /**
-     * Handles the send button action from FAQView
-     *
-     * <p>The method validates the question, disables the input while processing,
-     * runs the RAG process in the background, and updates the UI after the result
-     * is ready.</p>
-     *
-     * @param question question entered by the student in FAQView
-     */
+
     public void handleAskQuestion(String question) {
 
-        // Validate input before running the RAG process
+        // basic validation - empty question? just tell the user and stop
         if (question == null || question.isBlank()) {
             view.showError("Please enter a question before submitting.");
             return;
         }
 
-        // Show loading state before starting the background task.
+        // show the loading spinner and disable the input while we process
         Platform.runLater(() -> {
             view.setInputEnabled(false);
             view.showLoadingIndicator(question);
         });
 
-        // Run MCP retrieval and LLM generation on a background thread.
+        // run the actual RAG stuff on a background thread so the UI doesnt freeze
         worker.submit(() -> {
             try {
                 RagService.RagResult result = ragService.ask(question,"general");
@@ -73,14 +52,14 @@ public class FAQController {
                 String context = result.retrievedContext();
                 List<String> sources = extractSources(context);
 
-                // Success: update UI with context and answer
+                // back on the UI thread to show the answer
                 Platform.runLater(() -> {
                     view.displayResponse(answer, context, sources);
                     view.setInputEnabled(true);
                 });
 
             } catch (Exception e) {
-                // Failure: show error message in chat area
+                // if something goes wrong and show an error message in the chat
                 Platform.runLater(() -> {
                     view.showChatError("Unable to generate an answer. Please check the MCP server, API key, and network connection, then try again.");
                     view.setInputEnabled(true);
@@ -89,7 +68,7 @@ public class FAQController {
         });
     }
 
-    // this is previously done in ragresponse
+    // this extracts the source references from the context text
     private List<String> extractSources(String context){
         List<String> sources = new ArrayList<>();
         if(context == null || context.isEmpty()){
@@ -109,9 +88,7 @@ public class FAQController {
         return sources;
     }
 
-    /**
-     *Stops the background worker when the application is closing
-     */
+
     public void shutdown() {
         worker.shutdownNow();
     }
