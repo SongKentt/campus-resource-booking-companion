@@ -108,7 +108,6 @@ public class BookingController {
                 }
             }
 
-            System.out.println("Found " + bookableRoomIds.size() + " bookable rooms: " + bookableRoomIds);
 
         } catch (Exception e) {
             System.err.println("Failed to fetch bookable rooms: " + e.getMessage());
@@ -134,8 +133,6 @@ public class BookingController {
         allResources = filtered;
         availableResourceTypes = filteredTypes;
 
-        System.out.println("Filtered to " + allResources.size() + " bookable resources");
-        System.out.println("Available types: " + availableResourceTypes);
     }
 
     // sends the resource type list to the view , it has to run on the JavaFX thread since it touches UI components
