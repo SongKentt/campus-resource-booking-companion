@@ -19,66 +19,47 @@ import javafx.scene.text.FontWeight;
 
 import java.util.List;
 
-/**
- * JavaFX view for the RAG Policy Assistant screen.
- * Displays the chat area, retrieved sources, and question input.
- */
+
 public class FAQView extends BaseView {
 
     private FAQController controller;
 
-    // UI Components
-
+    // all the ui bits and pieces for the chat screen
     private final BorderPane root = new BorderPane();
 
-    private final VBox chatBox = new VBox(12);
+    private final VBox chatBox = new VBox(12);           // holds all chat messages
     private final ScrollPane chatScroll = new ScrollPane(chatBox);
 
-    private final VBox sourcesPanel = new VBox(8);
+    private final VBox sourcesPanel = new VBox(8);       // shows where the answer came from
     private final ScrollPane sourcesScroll = new ScrollPane(sourcesPanel);
 
-    private final TextField questionField = new TextField();
+    private final TextField questionField = new TextField();  // where user types their question
 
     private final Button sendButton = new Button("Send");
 
-    private final ProgressIndicator loadingIndicator = new ProgressIndicator();
+    private final ProgressIndicator loadingIndicator = new ProgressIndicator(); // spinning wheel while waiting for answer
 
-    /**
-     * Creates the FAQ screen and sets up its events.
-     */
+
     public FAQView() {
         buildLayout();
         wireEvents();
     }
 
-    /**
-     * Sets the controller that handles question submissions.
-     *
-     * @param controller controller for this view
-     */
     public void setController(FAQController controller) {
         this.controller = controller;
     }
 
-    /**
-     * Returns the root layout of this screen.
-     *
-     * @return root BorderPane
-     */
+
     public BorderPane getRoot() {
         return root;
     }
 
-    // Layout Construction
-
-    /**
-     * Builds the Policy Assistant screen layout.
-     */
+    // this whole method just adds stuff to the screen  its long but its just UI setup
     private void buildLayout() {
         root.setPadding(new Insets(0));
         root.setStyle("-fx-background-color: #f5f5f5;");
 
-        // Title bar
+        // the blue bar at the top with the title
         Label titleLabel = new Label("Ask anything about campus booking rules and policies");
         titleLabel.setFont(Font.font("Arial", FontWeight.BOLD, 16));
         titleLabel.setTextFill(Color.WHITE);
@@ -89,7 +70,7 @@ public class FAQView extends BaseView {
         titleBar.setAlignment(Pos.CENTER_LEFT);
         root.setTop(titleBar);
 
-        // Sources panel
+        // the sources panel to shows what documents/knowledge the AI used to answer
         Label sourcesTitle = new Label("Sources from knowledge base");
         sourcesTitle.setFont(Font.font("Arial", FontWeight.BOLD, 13));
         sourcesTitle.setTextFill(Color.web("#2E75B6"));
@@ -103,7 +84,7 @@ public class FAQView extends BaseView {
         sourcesScroll.setPrefWidth(280);
         sourcesScroll.setStyle("-fx-background: #EBF3FB; -fx-background-color: #EBF3FB;");
 
-        // Chat panel
+        // the chat area where messages appear
         chatBox.setPadding(new Insets(14));
         chatBox.setFillWidth(true);
         chatBox.setStyle("-fx-background-color: #FFFFFF;");
@@ -112,16 +93,16 @@ public class FAQView extends BaseView {
         chatScroll.setStyle("-fx-background: #FFFFFF; -fx-background-color: #FFFFFF;");
         HBox.setHgrow(chatScroll, Priority.ALWAYS);
 
-        // Loading indicator
         loadingIndicator.setMaxSize(30, 30);
         loadingIndicator.setVisible(false);
 
+        // main area split into sources which is panel left and chat right
         HBox mainArea = new HBox(sourcesScroll, chatScroll);
         HBox.setHgrow(chatScroll, Priority.ALWAYS);
         mainArea.setStyle("-fx-background-color: #f5f5f5;");
         root.setCenter(mainArea);
 
-        // Input bar
+        // the bottom bar where user types and clicks send
         questionField.setPromptText("Type your question about campus booking policies...");
         questionField.setFont(Font.font("Arial", 13));
         questionField.setPrefHeight(38);
@@ -140,17 +121,13 @@ public class FAQView extends BaseView {
         root.setBottom(inputBar);
     }
 
-    /**
-     * Connects the Send button and Enter key to question submission
-     */
+    // connects the send button and enter key so they both submit the question
     private void wireEvents() {
         sendButton.setOnAction(e -> submitQuestion());
         questionField.setOnAction(e -> submitQuestion());
     }
 
-    /**
-     * Sends the entered question to the controller
-     */
+    // takes whatever is in the text field and sends it to the controller
     private void submitQuestion() {
         if (controller == null) {
             showError("FAQ controller is not connected.");
@@ -165,15 +142,10 @@ public class FAQView extends BaseView {
         }
     }
 
-    // UI Update Methods
+    // shows the user's question in the chat and the loading spinner basically tells the user to wait for the AI to respond
 
-    /**
-     * Shows the submitted question and loading state.
-     *
-     * @param question submitted question
-     */
     public void showLoadingIndicator(String question) {
-        // Display student question bubble on the right side of the chat
+        // blue bubble on the right side - this is the user's question
         Label questionBubble = new Label(question);
         questionBubble.setWrapText(true);
         questionBubble.setMaxWidth(400);
@@ -185,31 +157,32 @@ public class FAQView extends BaseView {
         questionRow.setAlignment(Pos.CENTER_RIGHT);
         chatBox.getChildren().add(questionRow);
 
-        // Show "Generating answer..." placeholder
+        // placeholder text while waiting for the actual answer
         Label generatingLabel = new Label("Generating answer...");
         generatingLabel.setFont(Font.font("Arial", 13));
         generatingLabel.setTextFill(Color.GRAY);
         generatingLabel.setId("loading-label");
         chatBox.getChildren().add(generatingLabel);
 
-        // Show loading indicator in the input bar
+        // show the spinning wheel in the input bar
         loadingIndicator.setVisible(true);
 
-        // Scroll chat to bottom
+        // scroll down so user can see their question
         scrollToBottom();
     }
 
-
-
+    // this is where the answer actually shows up
     public void displayResponse(String answer, String context, List<String> sources) {
+
         chatBox.getChildren().removeIf(node ->
                 node instanceof Label lbl && "loading-label".equals(lbl.getId()));
 
-        // ── Display LLM answer in chat
+        // show "Assistant" label
         Label assistantLabel = new Label("Assistant");
         assistantLabel.setFont(Font.font("Arial", FontWeight.BOLD, 12));
         assistantLabel.setTextFill(Color.web("#1F3864"));
 
+        // the actual answer on the left side
         Label answerBubble = new Label(answer);
         answerBubble.setWrapText(true);
         answerBubble.setMaxWidth(450);
@@ -224,7 +197,7 @@ public class FAQView extends BaseView {
         answerRow.setAlignment(Pos.CENTER_LEFT);
         chatBox.getChildren().add(answerRow);
 
-        // Updates the sources panel using the retrieved RAG context.
+        // update the sources panel
         if (sourcesPanel.getChildren().size() > 1) {
             sourcesPanel.getChildren().remove(1, sourcesPanel.getChildren().size());
         }
@@ -239,7 +212,7 @@ public class FAQView extends BaseView {
             }
         }
 
-        // Display full retrieved context text in sources panel
+        // show the full context text too
         if (context != null && !context.isBlank()) {
             TextArea contextArea = new TextArea(context);
             contextArea.setEditable(false);
@@ -255,13 +228,9 @@ public class FAQView extends BaseView {
         scrollToBottom();
     }
 
-    /**
-     * Shows an error message in the chat area.
-     *
-     * @param message the error message to display
-     */
+    // shows an error message in the chat when something goes wrong
     public void showChatError(String message) {
-        // Remove the loading placeholder if present
+        // remove the loading placeholder if its still there
         chatBox.getChildren().removeIf(node ->
                 node instanceof Label lbl && "loading-label".equals(lbl.getId()));
 
@@ -281,44 +250,26 @@ public class FAQView extends BaseView {
         scrollToBottom();
     }
 
-    /**
-     * Enables or disables question input while processing.
-     *
-     * @param enabled true to enable input, false to disable it
-     */
+    // disables the input fields while waiting for an answer so the user cant spam
     public void setInputEnabled(boolean enabled) {
         sendButton.setDisable(!enabled);
         questionField.setDisable(!enabled);
         loadingIndicator.setVisible(!enabled);
     }
 
-    /**
-     * Scrolls the chat display to the bottom so the latest message is always visible.
-     */
+    // scrolls the chat to the bottom so the latest message is always visible
     private void scrollToBottom() {
         chatScroll.layout();
         chatScroll.setVvalue(1.0);
     }
 
-    // ── BaseView abstract method implementations ───────────────────────────────────────
-
-    /**
-     * Displays a validation or system error message as an inline alert above the input bar.
-     * Inherited from {@link BaseView} and used for empty query validation (FR7).
-     *
-     * @param message the error message to display
-     */
+    // BaseView methods
     @Override
     public void showError(String message) {
         showChatError(message);
     }
 
-    /**
-     * Displays a success notification in the chat area.
-     * Inherited from {@link BaseView}.
-     *
-     * @param message the success message to display
-     */
+    // shows success messages
     @Override
     public void showSuccess(String message) {
         Label successLabel = new Label(message);
@@ -335,11 +286,9 @@ public class FAQView extends BaseView {
 
     @Override
     public void onShow() {
-        // Nothing needed when this view is shown
     }
 
     @Override
     public void onHide() {
-        // Nothing needed when this view is hidden
     }
 }
