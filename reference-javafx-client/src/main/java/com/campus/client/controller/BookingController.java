@@ -39,7 +39,6 @@ public class BookingController {
         view.setController(this);
 
         // load the resource list as soon as the controller is made
-
         startWorker(() -> {
             loadResourcesFromServer();
         });
@@ -90,7 +89,6 @@ public class BookingController {
     }
 
     // asks the server which rooms show up in the availability check using todays date , this is basically how we know which resource ids are real bookable rooms
-
     private void fetchBookableRooms() {
         try {
             String today = LocalDate.now().toString();
@@ -370,10 +368,10 @@ public class BookingController {
             }
         }
 
-        // check this student doesnt already have an overlapping booking for the same room
+        // check if ANY student already has a booking for this room at this time
         if (isDuplicateBooking(studentId, roomId, date, startTime, endTime)) {
             Platform.runLater(() -> {
-                view.showError("You already have a booking for this room at this time.");
+                view.showError("This room is already booked at this time.");
                 view.setFormEnabled(true);
             });
             return;
@@ -407,15 +405,21 @@ public class BookingController {
         });
     }
 
-    // checks if the student already has a booking for this room where the time overlaps
+    // checks if ANY student already has a booking for this room at this time
     private boolean isDuplicateBooking(String studentId, String roomId,
                                        LocalDate date, LocalTime start, LocalTime end) {
-        List<Booking> userBookings = campusService.getUserBookings(studentId);
-        for (Booking b : userBookings) {
-            if (b.getResourceId().equals(roomId)
-                    && b.getDate().equals(date)
-                    && b.getStatus() == STATUS_ACTIVE) {
-                // classic overlap check: two time ranges overlap if one starts before the other ends
+        // Get ALL bookings, not just this student's
+        List<Booking> allBookings = campusService.getAllBookings();
+
+        for (Booking b : allBookings) {
+            // Skip cancelled bookings
+            if (b.getStatus() != STATUS_ACTIVE) {
+                continue;
+            }
+
+            // Check if same room and same date
+            if (b.getResourceId().equals(roomId) && b.getDate().equals(date)) {
+                // Check if time overlaps
                 boolean overlaps = start.isBefore(b.getEndTime()) && end.isAfter(b.getStartTime());
                 if (overlaps) {
                     return true;
@@ -424,5 +428,4 @@ public class BookingController {
         }
         return false;
     }
-
 }

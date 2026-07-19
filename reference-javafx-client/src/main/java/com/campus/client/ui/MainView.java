@@ -536,6 +536,12 @@ public class MainView extends BorderPane {
             if (response == ButtonType.OK) {
                 currentStudentId = "";
                 if (loginView != null) loginView.clearFields();
+
+                //clear chat here after logout
+                if (faqView != null) {
+                    faqView.clearChat();
+                }
+
                 showLogin();
                 hideAllNavButtons();
                 userInfoLabel.setText("");

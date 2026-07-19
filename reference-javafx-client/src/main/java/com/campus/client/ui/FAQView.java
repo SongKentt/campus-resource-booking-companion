@@ -142,6 +142,16 @@ public class FAQView extends BaseView {
         }
     }
 
+    //clear chat after logout
+    public void clearChat() {
+        chatBox.getChildren().clear();
+        if (sourcesPanel.getChildren().size() > 1) {
+            sourcesPanel.getChildren().remove(1, sourcesPanel.getChildren().size());
+        }
+        loadingIndicator.setVisible(false);
+        questionField.clear();
+    }
+
     // shows the user's question in the chat and the loading spinner basically tells the user to wait for the AI to respond
 
     public void showLoadingIndicator(String question) {
