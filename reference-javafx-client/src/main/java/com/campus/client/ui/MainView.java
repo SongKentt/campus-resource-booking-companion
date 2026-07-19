@@ -67,11 +67,10 @@ public class MainView extends BorderPane {
     private RagService rag;
     private FAQController faqController;
 
+    // status label for logging
     private Label statusLabel;
 
-
     private DataStorage dataStorage;
-
 
     // Constructor for MainView
     public MainView() {
@@ -86,7 +85,6 @@ public class MainView extends BorderPane {
 
         setTop(navbar);
         showLogin();
-
     }
 
     // Locates the data directory related to the project root
@@ -126,7 +124,6 @@ public class MainView extends BorderPane {
             setStatusMessage("Logged in as: " + studentId);
         };
     }
-
 
     // Builds the navigation bar
     private void buildNavbar() {
@@ -248,13 +245,12 @@ public class MainView extends BorderPane {
         return btn;
     }
 
+    // builds the status label
     private void buildStatusLabel() {
         statusLabel = new Label();
         statusLabel.setVisible(false);
         this.getChildren().add(statusLabel);
     }
-
-
 
     // builds the login screen
     private void buildLoginView() {
@@ -537,7 +533,6 @@ public class MainView extends BorderPane {
                 currentStudentId = "";
                 if (loginView != null) loginView.clearFields();
 
-                //clear chat here after logout
                 if (faqView != null) {
                     faqView.clearChat();
                 }
@@ -583,13 +578,9 @@ public class MainView extends BorderPane {
     public void bind(CampusMcpClient mcp, RagService rag) {
         this.mcp = mcp;
         this.rag = rag;
-        // The dot is set to green initially if the mcp server is connected
         updateMCPStatus(mcp != null);
 
-        /* As mentioned, a callback is registered to turn the dot RED when the server disconnects. The callback runs
-        on the MCP thread, so Platform.runLater() is used to safely update the JavaFX UI. This means that when a mcp service
-        is used when the server is disconnected, the dot will turn to red
-         */
+        // Set disconnect callback so the dot turns red when server disconnects
         if (mcp != null) {
             mcp.setOnDisconnect(() -> Platform.runLater(() -> updateMCPStatus(false)));
         }
